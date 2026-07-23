@@ -1,42 +1,71 @@
 import { DynamicTool } from "@langchain/core/tools";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { HumanMessage } from "@langchain/core/messages";
-
-const visionModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-flash", // or 2.5-flash
-  temperature: 0,
-});
+import { visionClient } from "../models/vision.js";
 
 export const prescriptionReaderTool = new DynamicTool({
   name: "read_prescription_image",
-  description: "Use this tool to extract drug names from the uploaded prescription image. You do not need to provide any input arguments to this tool.",
+
+  description: "Extract medicine names from uploaded prescription image.",
+
   func: async () => {
     try {
-      // Grab the image from the server's temporary memory
-      const base64Image = global.currentImageData; 
-      
-      if (!base64Image) return '{"drugs": []}';
+      const base64Image = global.currentImageData;
+
+      if (!base64Image) {
+        return JSON.stringify({
+          drugs: [],
+        });
+      }
 
       const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
-      
-      const message = new HumanMessage({
-        content: [
-          { 
-            type: "text", 
-            text: "You are a deterministic OCR reader. Extract the drug names from the image. Output only valid JSON with the key 'drugs' containing an array of strings. Do not invent names. If unreadable, output an empty array." 
+
+      const response = await visionClient.models.generateContent({
+        model: "gemini-3.1-flash-lite",
+
+        contents: [
+          {
+            role: "user",
+
+            parts: [
+              {
+                text: `
+Extract medicine names.
+
+Rules:
+- Return ONLY JSON.
+- No explanations.
+- Do not guess.
+
+Format:
+
+{
+ "drugs":[]
+}
+`,
+              },
+
+              {
+                inlineData: {
+                  mimeType: global.currentImageMimeType || "image/jpeg",
+
+                  data: cleanBase64,
+                },
+              },
+            ],
           },
-          { 
-            type: "image_url", 
-            image_url: { url: `data:image/jpeg;base64,${cleanBase64}` } 
-          }
-        ]
+        ],
       });
 
-      const response = await visionModel.invoke([message]);
-      return response.content;
+      console.log("===== DETECTED DRUGS =====");
+      console.log(response.text);
+      console.log("=============================");
+
+      return response.text;
     } catch (error) {
-      console.error("OCR Error:", error);
-      return '{"drugs": []}';
+      console.error("Vision Error:", error);
+
+      return JSON.stringify({
+        drugs: [],
+      });
     }
-  }
+  },
 });
