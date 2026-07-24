@@ -1,11 +1,15 @@
 {
   "version": 2,
   "builds": [
-    { "src": "server.js", "use": "@vercel/node" },
-    { "src": "normalizer/main.py", "use": "@vercel/python" }
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "server.js" },
-    { "src": "/normalize/(.*)", "dest": "normalizer/main.py" }
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
   ]
 }
