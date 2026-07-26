@@ -1,17 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import multer from "multer";
+import { visionClient } from "./models/vision.js";
 
-import { ChatMistralAI } from "@langchain/mistralai";
-
-import { createAgent } from "langchain";
-import {
-  ChatPromptTemplate,
-  MessagesPlaceholder,
-} from "@langchain/core/prompts";
-
-import { prescriptionReaderTool } from "./tools/PrescriptionReader.js";
 import { nameNormalizerTool } from "./tools/NameNormalizer.js";
 import { fdaInteractionTool } from "./tools/FDAInteractionChecker.js";
 import { fallbackData } from "./fallbackData.js";
@@ -42,130 +33,270 @@ function safeJsonParse(value) {
   }
 }
 
-const llm = new ChatMistralAI({
-  model: "mistral-small-latest",
-  apiKey: process.env.MISTRAL_API_KEY,
-  temperature: 0,
-});
+function extractDrugList(payload) {
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  if (Array.isArray(payload)) {
+    return payload
+      .map((drug) => (typeof drug === "string" ? drug.trim() : ""))
+      .filter(Boolean);
+  }
+
+  const drugs = Array.isArray(payload.drugs_detected)
+    ? payload.drugs_detected
+    : Array.isArray(payload.drugs)
+      ? payload.drugs
+      : [];
+
+  return drugs
+    .map((drug) => (typeof drug === "string" ? drug.trim() : ""))
+    .filter(Boolean);
+}
+
+function dedupeDrugList(drugs) {
+  const deduped = [];
+  const seen = new Set();
+
+  for (const drug of drugs) {
+    const cleanDrug = typeof drug === "string" ? drug.trim() : "";
+
+    if (!cleanDrug) {
+      continue;
+    }
+
+    const key = cleanDrug.toLowerCase();
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    deduped.push(cleanDrug);
+  }
+
+  return deduped;
+}
+
+function parseImageInput(image) {
+  if (typeof image !== "string" || !image.trim()) {
+    return null;
+  }
+
+  const trimmedImage = image.trim();
+  const dataUrlMatch = trimmedImage.match(/^data:([^;]+);base64,(.*)$/s);
+
+  if (dataUrlMatch) {
+    return {
+      mimeType: dataUrlMatch[1] || "image/jpeg",
+      data: dataUrlMatch[2],
+    };
+  }
+
+  return {
+    mimeType: "image/jpeg",
+    data: trimmedImage,
+  };
+}
+
+async function readPrescriptionImage(image) {
+  const parsedImage = parseImageInput(image);
+
+  if (!parsedImage) {
+    return [];
+  }
+
+  const response = await visionClient.models.generateContent({
+    model: "gemini-3.1-flash-lite",
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `
+Extract medicine names from this prescription image.
+
+Rules:
+- Return ONLY JSON.
+- No explanations.
+- Do not guess.
+
+Format:
+
+{
+ "drugs":[]
+}
+`,
+          },
+          {
+            inlineData: {
+              mimeType: parsedImage.mimeType,
+              data: parsedImage.data,
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const parsedResponse = safeJsonParse(response.text);
+
+  return extractDrugList(parsedResponse);
+}
+
+function collectFdaRawText(fdaData) {
+  if (!fdaData || typeof fdaData !== "object") {
+    return "";
+  }
+
+  if (Array.isArray(fdaData.raw_texts)) {
+    return fdaData.raw_texts
+      .map((text) => (typeof text === "string" ? text.trim() : ""))
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  if (typeof fdaData.warning === "string") {
+    return fdaData.warning.trim();
+  }
+
+  return "";
+}
+
+async function summarizeFdaInteraction({ rawText, drugs }) {
+  if (!rawText.trim()) {
+    return {
+      fda_summary:
+        "No known adverse interactions were returned by the openFDA data for these medications.",
+      fda_raw_text: "",
+    };
+  }
+
+  const response = await visionClient.models.generateContent({
+    model: "gemini-3.1-flash-lite",
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `
+You are RxGuard's medication safety explainer.
+
+Write a short, patient-friendly FDA interaction summary in JSON.
+
+Rules:
+- Use plain language.
+- Write exactly 2 to 3 sentences.
+- Keep the meaning medically accurate.
+- Do not mention that you are an AI.
+- Return ONLY JSON.
+- Include both fields below.
+- The fda_raw_text field must be copied exactly from the source text provided.
+
+Drugs involved: ${drugs.join(", ")}
+
+Source text:
+${rawText}
+
+Format:
+{
+  "fda_summary": "",
+  "fda_raw_text": ""
+}
+`,
+          },
+        ],
+      },
+    ],
+  });
+
+  const parsedSummary = safeJsonParse(response.text) || {};
+
+  return {
+    fda_summary:
+      typeof parsedSummary.fda_summary === "string" && parsedSummary.fda_summary.trim()
+        ? parsedSummary.fda_summary.trim()
+        : "No known adverse interactions were returned by the openFDA data for these medications.",
+    fda_raw_text: rawText,
+  };
+}
 
 const app = express();
 app.use(cors());
-const upload = multer({ storage: multer.memoryStorage() });
+app.use(express.json({ limit: "50mb" }));
 
-const tools = [prescriptionReaderTool, nameNormalizerTool, fdaInteractionTool];
-
-const prompt = ChatPromptTemplate.fromMessages([
-  [
-    "system",
-
-    `
-You are RxGuard Medical Safety Agent.
-
-Follow these steps:
-
-1. Call read_prescription_image.
-2. Normalize every detected drug.
-3. If two or more drugs exist call check_fda_interactions.
-4. Return ONLY JSON.
-
-Format:
-
-{
-"status":"",
-"drugs_detected":[],
-"fda_warning":""
-}
-
-No markdown.
-`,
-  ],
-
-  ["human", "{input}"],
-
-  new MessagesPlaceholder("agent_scratchpad"),
-]);
-
-const agent = createAgent({
-  model: llm,
-  tools,
-  systemPrompt: `
-You are RxGuard Medical Safety Agent.
-
-Follow these steps:
-
-1. Call read_prescription_image. (Read the ENTIRE prescription carefully.)
-2. Normalize every detected drug.
-3. If two or more drugs exist call check_fda_interactions.
-4. Return ONLY JSON.
-
-Requirements:
-
-- Read every handwritten medicine and give all of them as output.
-- Read from top to bottom.
-- Include medicines even if handwriting is difficult.
-- If confidence is low, include your best reading.
-- Ignore dosage, frequency and instructions.
-- Return ONLY medicine names.
-
-Format:
-
-{
-"status":"",
-"drugs_detected":[],
-"fda_warning":""
-}
-
-No markdown.
-`,
-});
-
-app.post("/api/analyze", upload.single("prescription"), async (req, res) => {
+app.post("/api/analyze", async (req, res) => {
   try {
-    if (!req.file) {
+    const imagesFromBody = Array.isArray(req.body?.images)
+      ? req.body.images
+      : req.body?.image
+        ? [req.body.image]
+        : [];
+
+    if (imagesFromBody.length === 0) {
       return res.status(400).json({ error: "No image uploaded" });
     }
 
-    const base64Image = req.file.buffer.toString("base64");
-    const formattedImageString = `data:${req.file.mimetype};base64,${base64Image}`;
+    console.log(`Image batch received. Processing ${imagesFromBody.length} image(s)...`);
 
-    // CRITICAL FIX 1: We save the giant image string to the server's global memory.
-    // Now the PrescriptionReader tool can find it here.
-    global.currentImageData = formattedImageString;
-    global.currentImageMimeType = req.file.mimetype || "image/jpeg";
+    const imageDrugGroups = await Promise.all(
+      imagesFromBody.map(async (image) => {
+        try {
+          return await readPrescriptionImage(image);
+        } catch (error) {
+          console.error("[backend/server.js] Vision OCR failed for one image:", error);
+          return [];
+        }
+      }),
+    );
 
-    console.log("Image received. Agent is analyzing...");
+    const masterRawDrugs = dedupeDrugList(imageDrugGroups.flat());
 
-    const result = await agent.invoke({
-      messages: [
-        {
-          role: "user",
-          content:
-            "I have uploaded a prescription image. Please read it, normalize the drugs, and check for FDA interactions.",
-        },
-      ],
-    });
-
-    // Clear the memory so the server doesn't get bloated over time.
-    global.currentImageData = null;
-    global.currentImageMimeType = null;
-
-    console.log("Agent finished thinking.");
-
-    const lastMessage = result.messages[result.messages.length - 1];
-
-    const parsedData = safeJsonParse(lastMessage.content);
-
-    if (!parsedData) {
-      console.error(
-        "[backend/server.js] Falling back because agent output was not valid JSON.",
-      );
-      return res.json(fallbackData);
+    if (masterRawDrugs.length === 0) {
+      return res.json({
+        status: "manual_entry_required",
+        drugs_detected: [],
+        fda_warning: "",
+      });
     }
 
-    res.json(parsedData);
+    const normalizedDrugResults = await Promise.all(
+      masterRawDrugs.map(async (drugName) => {
+        try {
+          const normalizedResponse = await nameNormalizerTool.func(drugName);
+          const normalizedData = safeJsonParse(normalizedResponse);
+          const normalizedName = normalizedData?.normalized_name;
+
+          return typeof normalizedName === "string" && normalizedName.trim()
+            ? normalizedName.trim()
+            : drugName;
+        } catch (error) {
+          console.error("[backend/server.js] Drug normalization failed:", error);
+          return drugName;
+        }
+      }),
+    );
+
+    const masterNormalizedDrugs = dedupeDrugList(normalizedDrugResults);
+
+    const fdaResponse = await fdaInteractionTool.func(masterNormalizedDrugs);
+    const fdaData = safeJsonParse(fdaResponse) || {};
+    const fdaRawText = collectFdaRawText(fdaData);
+    const summarizedFda = await summarizeFdaInteraction({
+      rawText: fdaRawText,
+      drugs: masterNormalizedDrugs,
+    });
+
+    res.json({
+      status: "success",
+      drugs_detected: masterNormalizedDrugs,
+      fda_summary: summarizedFda.fda_summary,
+      fda_raw_text: summarizedFda.fda_raw_text,
+      fda_warning: summarizedFda.fda_summary,
+      fda_report: fdaData,
+    });
   } catch (error) {
-    global.currentImageData = null;
-    global.currentImageMimeType = null;
     console.error(
       "[backend/server.js] CRITICAL ERROR ENCOUNTERED. Triggering Fallback Data.",
       error,
@@ -175,9 +306,9 @@ app.post("/api/analyze", upload.single("prescription"), async (req, res) => {
 });
 
 
-module.exports = app;
+// module.exports = app;
 
-// const PORT = process.env.PORT || 3000;
-// app.listen(PORT, () =>
-//   console.log(`RxGuard Orchestrator is running on port ${PORT}`),
-// );
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () =>
+console.log(`RxGuard Orchestrator is running on port ${PORT}`),
+);

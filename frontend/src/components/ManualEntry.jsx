@@ -30,7 +30,7 @@ export default function ManualEntry() {
           setSuggestion(data.normalized_name);
         }
       }
-    } catch (error) {
+    } catch {
       // Fail silently if the Python server is offline, allowing standard typing
       setSuggestion(null);
     }
