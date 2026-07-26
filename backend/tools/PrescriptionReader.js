@@ -1,6 +1,32 @@
 import { DynamicTool } from "@langchain/core/tools";
 import { visionClient } from "../models/vision.js";
 
+function extractDrugs(value) {
+  if (typeof value !== "string") {
+    return [];
+  }
+
+  const sanitizedOutput = value
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  if (!sanitizedOutput) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(sanitizedOutput);
+    const drugs = Array.isArray(parsed.drugs) ? parsed.drugs : [];
+
+    return drugs
+      .map((drug) => (typeof drug === "string" ? drug.trim() : ""))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export const prescriptionReaderTool = new DynamicTool({
   name: "read_prescription_image",
 
@@ -59,9 +85,13 @@ Format:
       console.log(response.text);
       console.log("=============================");
 
+      global.currentDetectedDrugs = extractDrugs(response.text);
+
       return response.text;
     } catch (error) {
       console.error("Vision Error:", error);
+
+      global.currentDetectedDrugs = [];
 
       return JSON.stringify({
         drugs: [],

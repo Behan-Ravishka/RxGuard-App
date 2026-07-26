@@ -1,10 +1,45 @@
+import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '../supabaseClient';
 
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
+  const saveAttemptedRef = useRef(false);
   
   const result = location.state?.result;
+
+  useEffect(() => {
+    const saveResultToHistory = async () => {
+      if (!result || saveAttemptedRef.current || !supabase) {
+        return;
+      }
+
+      saveAttemptedRef.current = true;
+
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+
+      if (!user) {
+        return;
+      }
+
+      const payload = {
+        user_id: user.id,
+        status: result.status ?? 'success',
+        drugs_detected: Array.isArray(result.drugs_detected) ? result.drugs_detected : [],
+        fda_warning: result.fda_warning ?? '',
+      };
+
+      const { error } = await supabase.from('scan_history').insert([payload]);
+
+      if (error) {
+        console.error('[frontend/components/Results.jsx] Failed to save scan history:', error);
+      }
+    };
+
+    saveResultToHistory();
+  }, [result]);
 
   if (!result) {
     return (
@@ -17,7 +52,7 @@ export default function Results() {
     );
   }
 
-  const { status, drugs_detected = [], fda_warning = "" } = result;
+  const { status, drugs_detected = [], fda_summary = "", fda_raw_text = "", fda_warning = "" } = result;
 
   const getSeverityUI = (warning) => {
     if (!warning || warning.trim() === "") {
@@ -38,7 +73,15 @@ export default function Results() {
     return { label: 'MINOR INTERACTION', bgColor: 'bg-severity-green', icon: 'ℹ️' };
   };
 
-  const severityUI = getSeverityUI(fda_warning);
+  const severityUI = getSeverityUI(fda_summary || fda_warning);
+
+  const handleReadFullDetails = () => {
+    navigate('/details', {
+      state: {
+        fda_raw_text,
+      },
+    });
+  };
 
   return (
     <div className="flex flex-col h-full space-y-5 pb-8 mt-2">
@@ -82,10 +125,21 @@ export default function Results() {
           FDA Interaction Details
         </h3>
         
-        {fda_warning ? (
-          <p className="text-sm text-gray-300 leading-relaxed font-medium">
-            {fda_warning}
-          </p>
+        {fda_summary ? (
+          <>
+            <p className="text-sm text-gray-300 leading-relaxed font-medium">
+              {fda_summary}
+            </p>
+
+            {fda_raw_text ? (
+              <button
+                onClick={handleReadFullDetails}
+                className="mt-4 inline-flex items-center justify-center rounded-full border border-gray-600 bg-gray-800 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors hover:bg-gray-700"
+              >
+                Read Full Official FDA Documentation
+              </button>
+            ) : null}
+          </>
         ) : (
           <p className="text-sm text-gray-400 italic">
             No known adverse interactions found between these medications based on current openFDA data.

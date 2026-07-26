@@ -1,40 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AgentStatus from './AgentStatus';
 
 export default function Analyzing() {
   const location = useLocation();
   const navigate = useNavigate();
-  const image = location.state?.image;
-  
-  const [agentResult, setAgentResult] = useState(null);
+  const images = useMemo(
+    () => location.state?.images ?? (location.state?.image ? [location.state.image] : []),
+    [location.state],
+  );
 
   useEffect(() => {
-    if (!image) return;
+    if (images.length === 0) return;
 
     const triggerAI = async () => {
       try {
-        // 1. Convert the Base64 image back into a File object for Multer
-        const res = await fetch(image);
-        const blob = await res.blob();
-        const formData = new FormData();
-        formData.append('prescription', blob, 'prescription.jpg');
-
-        // 2. Send it to your live backend (or local if in development)
+        // Send the queued Base64 images to the backend for concurrent OCR.
         const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
         const response = await fetch(`${API_URL}/api/analyze`, {
           method: 'POST',
-          body: formData
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ images })
         });
         
-        // 3. Capture the final JSON from Gemini
         const data = await response.json();
         console.log("Agent Final Output:", data);
         
-        // Save it to state so we know it finished
-        setAgentResult(data);
-        
-        // 4. Check the AI status flag and route accordingly
         setTimeout(() => {
           if (data.status === "manual_entry_required") {
             navigate('/manual', { 
@@ -51,13 +44,13 @@ export default function Analyzing() {
         navigate('/manual', { 
           state: { message: "Server connection lost. Please enter medications manually." } 
         });
-      } // <--- FIX: Closes the catch block
-    }; // <--- FIX: Closes the triggerAI function
+      }
+    };
 
     triggerAI();
-  }, [image, navigate]);
+  }, [images, navigate]);
 
-  if (!image) {
+  if (images.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full pt-20">
         <p>No image detected.</p>
@@ -71,12 +64,16 @@ export default function Analyzing() {
   return (
     <div className="flex flex-col items-center justify-center h-full pt-6 space-y-6">
       
-      {/* A small thumbnail of what they captured */}
-      <img 
-        src={image} 
-        alt="Captured" 
-        className="w-32 h-32 object-cover border-2 border-gray-700 rounded-lg shadow-lg opacity-50" 
-      />
+      <div className="flex flex-wrap justify-center gap-3 px-4">
+        {images.map((image, index) => (
+          <img 
+            key={`${index}-${image.slice(0, 24)}`}
+            src={image} 
+            alt={`Captured ${index + 1}`} 
+            className="w-24 h-24 object-cover border-2 border-gray-700 rounded-lg shadow-lg opacity-50" 
+          />
+        ))}
+      </div>
       
       {/* The workflow visualizer */}
       <AgentStatus />

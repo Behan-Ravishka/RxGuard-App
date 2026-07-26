@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Camera } from 'react-camera-pro';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,27 +7,66 @@ export default function Capture() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
-  // 1. Existing Camera Capture Logic
+  const [imageQueue, setImageQueue] = useState([]);
+
+  const addImagesToQueue = (images) => {
+    const validImages = images.filter(Boolean);
+
+    if (validImages.length === 0) {
+      return;
+    }
+
+    setImageQueue((currentQueue) => [...currentQueue, ...validImages]);
+  };
+
   const handleCapture = () => {
     if (camera.current) {
       const photoBase64 = camera.current.takePhoto();
-      navigate('/analyze', { state: { image: photoBase64 } });
+
+      if (photoBase64) {
+        addImagesToQueue([photoBase64]);
+      }
     }
   };
 
-  // 2. New File Upload Logic
   const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
 
-    // Read the image file and convert it to a Base64 string
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result;
-      // Send the uploaded image to the exact same analyze route!
-      navigate('/analyze', { state: { image: base64String } });
-    };
-    reader.readAsDataURL(file);
+    if (files.length === 0) {
+      return;
+    }
+
+    Promise.all(
+      files.map(
+        (file) =>
+          new Promise((resolve) => {
+            const reader = new FileReader();
+
+            reader.onloadend = () => {
+              resolve(reader.result);
+            };
+
+            reader.readAsDataURL(file);
+          }),
+      ),
+    ).then((base64Images) => {
+      addImagesToQueue(base64Images);
+      event.target.value = '';
+    });
+  };
+
+  const handleAnalyzeAll = () => {
+    if (imageQueue.length === 0) {
+      return;
+    }
+
+    navigate('/analyze', { state: { images: imageQueue } });
+  };
+
+  const removeImage = (indexToRemove) => {
+    setImageQueue((currentQueue) =>
+      currentQueue.filter((_, index) => index !== indexToRemove),
+    );
   };
 
   return (
@@ -64,10 +103,50 @@ export default function Capture() {
       <input 
         type="file" 
         accept="image/*" 
+        multiple
         ref={fileInputRef}
         onChange={handleFileUpload}
         className="hidden" 
       />
+
+      {imageQueue.length > 0 && (
+        <div className="absolute bottom-28 z-20 w-full px-4">
+          <div className="rounded-2xl border border-gray-700 bg-gray-950/90 backdrop-blur-md p-4 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500">Image Queue</p>
+                <p className="text-sm font-semibold text-white">{imageQueue.length} image{imageQueue.length === 1 ? '' : 's'} ready</p>
+              </div>
+
+              <button
+                onClick={handleAnalyzeAll}
+                className="shrink-0 rounded-full bg-severity-green px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-950 transition-transform active:scale-95"
+              >
+                Analyze All
+              </button>
+            </div>
+
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {imageQueue.map((image, index) => (
+                <div key={`${index}-${image.slice(0, 24)}`} className="relative shrink-0">
+                  <img
+                    src={image}
+                    alt={`Queued prescription ${index + 1}`}
+                    className="h-20 w-20 rounded-xl object-cover border border-gray-700"
+                  />
+                  <button
+                    onClick={() => removeImage(index)}
+                    className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-xs font-bold text-white border border-gray-600"
+                    aria-label={`Remove image ${index + 1}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Controls Container */}
       <div className="absolute bottom-8 z-20 w-full px-8 flex items-center justify-between">
