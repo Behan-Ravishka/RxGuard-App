@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import BottomNav from './BottomNav';
+import logo from '/assets/logo.png';
 
 export default function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState(null);
 
   useEffect(() => {
@@ -40,52 +44,52 @@ export default function Layout() {
     navigate('/');
   };
 
+  const isCaptureRoute = location.pathname === '/capture';
+
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="border-b border-gray-800 bg-gray-950/95 px-4 py-4 backdrop-blur">
+    <div className="flex min-h-screen flex-col bg-[#F8FAFC] text-[#34214f]">
+      <header className="border-b border-indigo-100/70 bg-white/80 px-4 py-3 shadow-sm backdrop-blur-lg">
         <div className="flex items-center justify-between gap-3">
-          <Link to="/" className="flex flex-col leading-none">
-            <span className="text-xl font-black tracking-wide text-white">RxGuard</span>
-            <span className="text-[10px] uppercase tracking-[0.3em] text-gray-500">Medication Safety</span>
+          <Link to="/" className="flex items-center gap-2 leading-none">
+            <img src={logo} alt="RxGuard logo" className="h-12 w-auto object-contain rounded-lg" />
           </Link>
 
           <div className="flex items-center gap-2">
             {!isSupabaseConfigured && (
-              <span className="rounded-full border border-amber-700/60 bg-amber-950/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-300">
-                Supabase not configured
+              <span className="hidden rounded-full border border-[#f3d8a2] bg-[#fff7e3] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#ae6f00] sm:inline-flex">
+                Demo mode
               </span>
             )}
 
             {!session ? (
-              <Link
-                to="/auth"
-                className="rounded-full border border-gray-700 bg-gray-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors hover:bg-gray-800"
-              >
-                Sign In / Sign Up
-              </Link>
-            ) : (
-              <>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                 <Link
-                  to="/history"
-                  className="rounded-full border border-gray-700 bg-gray-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors hover:bg-gray-800"
+                  to="/auth"
+                  className="rounded-full border border-[#dfd0ff] bg-[#f7f1ff] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#4c2c97]"
                 >
-                  My History
+                  Sign In
                 </Link>
-                <button
-                  onClick={handleSignOut}
-                  className="rounded-full bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-gray-950 transition-transform active:scale-95"
-                >
-                  Sign Out
-                </button>
-              </>
+              </motion.div>
+            ) : (
+              <motion.button
+                type="button"
+                onClick={handleSignOut}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                className="rounded-full bg-[#4c2c97] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white"
+              >
+                Sign Out
+              </motion.button>
             )}
           </div>
         </div>
       </header>
-      
-      <main className="flex-grow p-4">
+
+      <main className={`flex-1 ${isCaptureRoute ? 'overflow-hidden px-0 py-0 pb-0' : 'overflow-y-auto px-4 py-4 pb-24'}`}>
         <Outlet />
       </main>
+
+      <BottomNav hideScanFab={isCaptureRoute} />
     </div>
   );
 }
