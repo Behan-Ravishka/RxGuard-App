@@ -12,6 +12,7 @@ import FullDetails from './components/FullDetails';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
 import Alerts from './components/Alerts';
+import Insights from './components/Insights'; // Added the new Insights import
 import SplashScreen from './components/features/onboarding/SplashScreen';
 import WelcomeGuide from './components/features/onboarding/WelcomeGuide';
 
@@ -52,6 +53,7 @@ export default function App() {
               <Route path="details" element={<FullDetails />} />
               <Route path="profile" element={<Profile />} />
               <Route path="alerts" element={<Alerts />} />
+              <Route path="insights" element={<Insights />} /> {/* Added the Insights route */}
               <Route path="services" element={<Dashboard />} />
               <Route path="journal" element={<Dashboard />} />
               <Route path="messages" element={<Dashboard />} />
