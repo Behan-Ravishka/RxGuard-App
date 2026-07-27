@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
+import { Scan, AlertTriangle, FileText, UserPlus } from 'lucide-react';
+import scanCardImage from "../assets/scan_card.png";
 
+// Updated quickActions array with Lucide icons and exact titles from the image
 const quickActions = [
-  { title: 'Scan', subtitle: 'Camera capture', icon: '📷', to: '/capture' },
-  { title: 'Safety alerts', subtitle: 'Recent findings', icon: '🧪', to: '/alerts' },
-  { title: 'Drug history', subtitle: 'Past reviews', icon: '🧾', to: '/history' },
-  { title: 'Med profile', subtitle: 'Care plan', icon: '🩺', to: '/profile' },
+  { title: 'Scan', icon: Scan, to: '/capture' },
+  { title: 'Safety Alerts', icon: AlertTriangle, to: '/alerts' },
+  { title: 'Drug History', icon: FileText, to: '/history' },
+  { title: 'Med Profile', icon: UserPlus, to: '/profile' },
 ];
 
 const upcomingDoses = [
@@ -24,61 +26,64 @@ const interactionFeed = [
 export default function Dashboard() {
   return (
     <div className="space-y-4">
+      {/* New Hero Scan Card */}
       <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="overflow-hidden rounded-[1.75rem] border border-white/50 bg-gradient-to-br from-[#fef7ff] via-[#f7ecff] to-[#efe7ff] p-5 shadow-sm backdrop-blur-lg"
+        className="relative overflow-hidden rounded-[1.75rem] border border-white/60 bg-gradient-to-br from-[#f8f0ff] via-[#f1e6ff] to-[#eaddff] p-6 shadow-sm backdrop-blur-lg"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#8b6fd6]">
-              Today at a glance
-            </p>
-            <h1 className="mt-2 text-2xl font-black text-[#3f2a69]">Scan new prescription</h1>
-            <p className="mt-2 text-sm leading-6 text-[#66558a]">
-              Review interactions instantly and keep medication plans safe in one place.
-            </p>
-          </div>
-          <div className="flex h-12 w-20 items-center justify-center rounded-3xl bg-[#5b3bbb] text-2xl text-white shadow-lg">
-            📷
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <motion.div whileHover={{ scale: 1.02, y: -1 }} whileTap={{ scale: 0.97 }}>
+        <div className="relative z-10 w-[60%]">
+          <h1 className="text-[24px] font-bold leading-[1.15] text-[#111827]">
+            Scan New<br />Prescription
+          </h1>
+          <p className="mt-2 text-[14px] leading-snug text-[#4b5563]">
+            Analyze your new<br />meds instantly.
+          </p>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} className="mt-5 inline-block">
             <Link
               to="/capture"
-              className="inline-flex items-center gap-2 rounded-full bg-[#4c2c97] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_40px_-14px_rgba(88,43,174,0.8)]"
+              className="rounded-full bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] px-6 py-2.5 text-[13px] font-semibold text-white shadow-[0_8px_20px_-6px_rgba(139,92,246,0.5)]"
             >
-              Start scan
-              <ArrowRight size={16} />
+              Scan Now
             </Link>
           </motion.div>
-          <span className="rounded-full border border-[#e8dcff] bg-white/70 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#7f66b4]">
-            AI safety review
-          </span>
+        </div>
+        
+        {/* Right side 3D Image */}
+        <div className="absolute -right-3 top-1/2 w-[50%] max-w-[170px] -translate-y-1/2">
+          <img 
+            src={scanCardImage} 
+            alt="Scan prescription illustration" 
+            className="h-auto w-full object-contain drop-shadow-2xl"
+          />
         </div>
       </motion.section>
 
-      <section className="grid grid-cols-2 gap-3">
-        {quickActions.map((action) => (
-          <motion.div
-            key={action.title}
-            whileHover={{ y: -2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-            transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-          >
-            <Link to={action.to} className="glass-card flex items-start gap-3 p-3 text-left">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#f4ebff] text-xl text-[#5b3bbb]">
-                {action.icon}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[#34214f]">{action.title}</p>
-                <p className="mt-1 text-xs text-[#7f6b9d]">{action.subtitle}</p>
-              </div>
-            </Link>
-          </motion.div>
-        ))}
+      {/* Quick Actions Section */}
+      <section className="grid grid-cols-4 gap-2.5">
+        {quickActions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <motion.div
+              key={action.title}
+              whileHover={{ y: -2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+            >
+              <Link 
+                to={action.to} 
+                className="flex aspect-square flex-col items-center justify-center gap-2.5 rounded-[1.25rem] bg-white/80 p-2 text-center shadow-[0_4px_20px_-4px_rgba(139,92,246,0.12)] border border-white/60 backdrop-blur-md"
+              >
+                <div className="text-[#8b5cf6]">
+                  <Icon size={24} strokeWidth={1.5} />
+                </div>
+                <p className="text-[10px] font-bold text-[#34214f] leading-tight w-full break-words">
+                  {action.title}
+                </p>
+              </Link>
+            </motion.div>
+          );
+        })}
       </section>
 
       <section className="glass-card p-4">
