@@ -15,7 +15,7 @@ export default function CameraView({ onCapture, onUpload, isAnalyzing }) {
       if (photo) {
         onCapture(photo);
       }
-    } catch (e) {
+    } catch {
       setError('Camera did not return a capture. Please try again.');
     }
   };

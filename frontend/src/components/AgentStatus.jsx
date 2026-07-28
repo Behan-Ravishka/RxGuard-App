@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { CheckCircle2, Loader2, Circle } from 'lucide-react';
 
 export default function AgentStatus() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -24,34 +25,34 @@ export default function AgentStatus() {
   }, []);
 
   return (
-    <div className="w-full max-w-sm mt-6 p-5 bg-gray-900 rounded-xl shadow-lg border border-gray-700">
-      <h3 className="text-sm font-bold mb-4 text-gray-300 uppercase tracking-widest border-b border-gray-700 pb-2">
-        Live Agent Workflow
+    <div className="w-full max-w-sm mt-4 rounded-[1.75rem] border border-white/60 bg-white/70 p-6 shadow-[0_8px_30px_-12px_rgba(139,92,246,0.15)] backdrop-blur-xl">
+      <h3 className="mb-5 border-b border-[#dfd0ff] pb-3 text-[10px] font-bold uppercase tracking-[0.3em] text-[#8b6fd6]">
+        Live AI Analysis
       </h3>
       
-      <ul className="space-y-4">
+      <ul className="space-y-5">
         {steps.map((step, index) => {
           const isActive = index === currentStep;
           const isPast = index < currentStep;
 
           return (
-            <li key={index} className="flex items-center space-x-3">
+            <li key={index} className="flex items-center space-x-4">
               {/* Status Indicator Icon */}
               <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center">
                 {isPast ? (
-                  <span className="text-severity-green text-lg font-bold">✓</span>
+                  <CheckCircle2 size={20} className="text-[#10b981]" /> // Emerald Green
                 ) : isActive ? (
-                  <span className="w-4 h-4 border-2 border-severity-orange border-t-transparent rounded-full animate-spin"></span>
+                  <Loader2 size={20} className="text-[#8b5cf6] animate-spin" /> // Theme Purple
                 ) : (
-                  <span className="w-2 h-2 bg-gray-600 rounded-full"></span>
+                  <Circle size={16} className="text-[#dfd0ff]" /> // Light Pastel Gray/Purple
                 )}
               </div>
               
-              {/* Text Formatting */}
-              <span className={`text-sm font-medium transition-all duration-300 ${
-                isActive ? 'text-severity-orange animate-pulse' : 
-                isPast ? 'text-gray-500 line-through' : 
-                'text-gray-600'
+              {/* Text Formatting with NO strikethrough, just soft opacity */}
+              <span className={`text-sm transition-all duration-500 ${
+                isActive ? 'text-[#201c45] font-bold scale-[1.02] origin-left' : 
+                isPast ? 'text-[#7f6b9d] opacity-50 font-medium' : 
+                'text-[#a79bbd] font-medium'
               }`}>
                 {step}
               </span>

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { useSupabaseClient } from '../supabaseClient.jsx';
 
 export default function History() {
   const navigate = useNavigate();
+  const { supabase, session, loading: authLoading } = useSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [scans, setScans] = useState([]);
@@ -12,20 +13,10 @@ export default function History() {
   useEffect(() => {
     const loadHistory = async () => {
       if (!supabase) {
-        setLoading(false);
-        setError('Supabase is not configured.');
         return;
       }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-
-      if (userError) {
-        setError(userError.message);
-        setLoading(false);
-        return;
-      }
-
-      const user = userData?.user;
+      const user = session?.user;
 
       if (!user) {
         setLoading(false);
@@ -34,7 +25,7 @@ export default function History() {
 
       const { data, error: historyError } = await supabase
         .from('scan_history')
-        .select('id, created_at, status, drugs_detected, fda_warning')
+        .select('id, created_at, drugs_detected, fda_warning, severity_level')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -48,7 +39,40 @@ export default function History() {
     };
 
     loadHistory();
-  }, []);
+  }, [session, supabase]);
+
+  if (authLoading) {
+    return (
+      <div className="mx-auto flex w-full max-w-md flex-col gap-4 py-4 glass-card">
+        <div className="rounded-[1.75rem] border border-white/60 bg-white/80 p-5 shadow-sm backdrop-blur-lg">
+          <div className="rounded-2xl border border-[#efe6ff] bg-[#faf7ff] p-4 text-sm text-slate-600">
+            Loading account details...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="mx-auto flex w-full max-w-md flex-col gap-4 py-4 glass-card">
+        <div className="rounded-[1.75rem] border border-white/60 bg-white/80 p-5 shadow-sm backdrop-blur-lg">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-indigo-500">Saved scans</p>
+          <h2 className="mt-2 text-2xl font-black text-[#34214f]">My history</h2>
+          <div className="mt-4 rounded-2xl border border-[#efe6ff] bg-[#faf7ff] p-4 text-sm text-slate-600">
+            Sign in to sync your medication timeline and view your saved scan details.
+          </div>
+          <Link
+            to="/auth"
+            state={{ from: '/history' }}
+            className="mt-5 block w-full rounded-2xl border border-[#dfd0ff] bg-[#f7f1ff] px-4 py-3 text-center text-sm font-semibold text-[#4c2c97]"
+          >
+            Sign in or register
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4 py-4 glass-card">
@@ -69,12 +93,6 @@ export default function History() {
           </motion.button>
         </div>
 
-        {!isSupabaseConfigured && (
-          <div className="mb-4 rounded-2xl border border-[#f3d8a2] bg-[#fff7e3] p-4 text-sm text-[#ae6f00]">
-            Supabase is not configured.
-          </div>
-        )}
-
         {loading ? (
           <div className="rounded-2xl border border-[#efe6ff] bg-[#faf7ff] p-4 text-sm text-slate-600">
             Loading history...
@@ -94,7 +112,7 @@ export default function History() {
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#8b6fd6]">{new Date(scan.created_at).toLocaleString()}</p>
-                    <p className="mt-1 text-sm font-semibold text-[#34214f] capitalize">{scan.status || 'saved scan'}</p>
+                    <p className="mt-1 text-sm font-semibold text-[#34214f] capitalize">{scan.severity_level || 'saved scan'}</p>
                   </div>
                   <span className="rounded-full border border-[#e8dcff] bg-[#f5edff] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5b3bbb]">
                     #{scan.id}
@@ -125,6 +143,7 @@ export default function History() {
 
         <Link
           to="/auth"
+          state={{ from: '/history' }}
           className="mt-5 block w-full rounded-2xl border border-[#dfd0ff] bg-[#f7f1ff] px-4 py-3 text-center text-sm font-semibold text-[#4c2c97]"
         >
           Manage account

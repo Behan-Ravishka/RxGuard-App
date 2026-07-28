@@ -1,10 +1,14 @@
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
+import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, User, Calendar, RefreshCw, Download } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { useSupabaseClient } from '../supabaseClient.jsx';
 
 export default function Profile() {
   const navigate = useNavigate();
+  const { supabase, session, loading: authLoading } = useSupabaseClient();
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   const handleSignOut = async () => {
     if (!supabase) {
@@ -13,6 +17,81 @@ export default function Profile() {
     await supabase.auth.signOut();
     navigate('/');
   };
+
+  useEffect(() => {
+    const loadProfileHistory = async () => {
+      if (!supabase || !session?.user) {
+        setHistory([]);
+        setHistoryLoading(false);
+        return;
+      }
+
+      setHistoryLoading(true);
+      const { data, error } = await supabase
+        .from('scan_history')
+        .select('id, created_at, drugs_detected, fda_warning, severity_level')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!error) {
+        setHistory(data ?? []);
+      }
+
+      setHistoryLoading(false);
+    };
+
+    loadProfileHistory();
+  }, [session, supabase]);
+
+  if (authLoading) {
+    return (
+      <div className="space-y-5">
+        <div className="rounded-[1.75rem] border border-white/60 bg-white/80 p-5 shadow-sm backdrop-blur-lg">
+          <div className="rounded-2xl border border-[#efe6ff] bg-[#faf7ff] p-4 text-sm text-slate-600">
+            Loading profile...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="space-y-5">
+        <div className="rounded-[1.75rem] border border-white/60 bg-white/80 p-5 shadow-sm backdrop-blur-lg">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-[#8b5cf6] to-[#7c3aed] text-white shadow-lg shadow-purple-500/25">
+              <User size={28} strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[#8b6fd6]">Caretaker Profile</p>
+              <h1 className="mt-1 text-2xl font-black text-[#201c45]">Sign in required</h1>
+            </div>
+          </div>
+
+          <p className="mt-5 text-sm leading-relaxed text-slate-600">
+            Log in to see your profile details, saved medications, and scan timeline.
+          </p>
+
+          <Link
+            to="/auth"
+            state={{ from: '/profile' }}
+            className="mt-5 block w-full rounded-2xl bg-[#8b5cf6] px-4 py-3 text-center text-sm font-semibold text-white shadow-md shadow-purple-500/20"
+          >
+            Sign in or register
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const totalScans = history.length;
+  const totalMedications = history.reduce(
+    (count, scan) => count + (Array.isArray(scan.drugs_detected) ? scan.drugs_detected.length : 0),
+    0,
+  );
+  const latestScan = history[0];
 
   // Helper for the calendar to highlight today (e.g., Wednesday)
   const currentDayIndex = 2; 
@@ -34,19 +113,31 @@ export default function Profile() {
             <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[#8b6fd6]">
               Caretaker Profile
             </p>
-            <h1 className="mt-1 text-2xl font-black text-[#201c45]">Mina Patel</h1>
+            <h1 className="mt-1 text-2xl font-black text-[#201c45]">{session.user.email}</h1>
           </div>
         </div>
         
         <div className="mt-6 grid grid-cols-2 gap-3">
           <div className="rounded-[1.25rem] border border-white/60 bg-white/60 p-4 backdrop-blur-md">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7f6b9d]">Medications</p>
-            <p className="mt-1 text-xl font-bold text-[#34214f]">6 active</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7f6b9d]">Saved scans</p>
+            <p className="mt-1 text-xl font-bold text-[#34214f]">{totalScans}</p>
           </div>
           <div className="rounded-[1.25rem] border border-white/60 bg-white/60 p-4 backdrop-blur-md">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7f6b9d]">Last Check</p>
-            <p className="mt-1 text-xl font-bold text-[#34214f]">2h ago</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7f6b9d]">Medications</p>
+            <p className="mt-1 text-xl font-bold text-[#34214f]">{totalMedications}</p>
           </div>
+        </div>
+
+        <div className="mt-4 rounded-[1.25rem] border border-white/60 bg-white/60 p-4 backdrop-blur-md">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7f6b9d]">Latest scan</p>
+          <p className="mt-1 text-sm font-semibold text-[#34214f]">
+            {latestScan ? new Date(latestScan.created_at).toLocaleString() : 'No scans saved yet'}
+          </p>
+          <p className="mt-2 text-sm text-slate-600">
+            {latestScan && Array.isArray(latestScan.drugs_detected) && latestScan.drugs_detected.length > 0
+              ? latestScan.drugs_detected.join(', ')
+              : 'Save a scan to populate this summary.'}
+          </p>
         </div>
       </motion.section>
 
@@ -105,6 +196,12 @@ export default function Profile() {
           Export Report
         </button>
       </motion.section>
+
+      {historyLoading ? (
+        <div className="rounded-[1.75rem] border border-white/60 bg-white/80 p-5 shadow-sm backdrop-blur-lg text-sm text-slate-600">
+          Loading recent medication history...
+        </div>
+      ) : null}
 
       {/* Sign Out Section */}
       <motion.section

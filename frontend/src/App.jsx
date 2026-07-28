@@ -15,6 +15,7 @@ import Alerts from './components/Alerts';
 import Insights from './components/Insights'; // Added the new Insights import
 import SplashScreen from './components/features/onboarding/SplashScreen';
 import WelcomeGuide from './components/features/onboarding/WelcomeGuide';
+import { SupabaseProvider } from './supabaseClient.jsx';
 
 export default function App() {
   const [status, setStatus] = useState('loading');
@@ -40,26 +41,28 @@ export default function App() {
       {status === 'loading' ? <SplashScreen /> : null}
       {status === 'onboarding' ? <WelcomeGuide onComplete={handleOnboardingComplete} /> : null}
       {status === 'app' ? (
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="capture" element={<Capture />} />
-              <Route path="analyze" element={<Analyzing />} />
-              <Route path="results" element={<Results />} />
-              <Route path="manual" element={<ManualEntry />} />
-              <Route path="auth" element={<Auth />} />
-              <Route path="history" element={<History />} />
-              <Route path="details" element={<FullDetails />} />
-              <Route path="profile" element={<Profile />} />
-              <Route path="alerts" element={<Alerts />} />
-              <Route path="insights" element={<Insights />} /> {/* Added the Insights route */}
-              <Route path="services" element={<Dashboard />} />
-              <Route path="journal" element={<Dashboard />} />
-              <Route path="messages" element={<Dashboard />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+        <SupabaseProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="capture" element={<Capture />} />
+                <Route path="analyze" element={<Analyzing />} />
+                <Route path="results" element={<Results />} />
+                <Route path="manual" element={<ManualEntry />} />
+                <Route path="auth" element={<Auth />} />
+                <Route path="history" element={<History />} />
+                <Route path="details" element={<FullDetails />} />
+                <Route path="profile" element={<Profile />} />
+                <Route path="alerts" element={<Alerts />} />
+                <Route path="insights" element={<Insights />} /> {/* Added the Insights route */}
+                <Route path="services" element={<Dashboard />} />
+                <Route path="journal" element={<Dashboard />} />
+                <Route path="messages" element={<Dashboard />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </SupabaseProvider>
       ) : null}
     </>
   );
