@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { Scan, AlertTriangle, FileText, UserPlus } from 'lucide-react';
 import scanCardImage from "../assets/scan_card.png";
+import { useSupabaseClient } from '../supabaseClient.jsx';
 
 // Updated quickActions array with Lucide icons and exact titles from the image
 const quickActions = [
@@ -17,13 +19,46 @@ const upcomingDoses = [
   { name: 'Vitamin D', time: '19:00', dose: '1 tab' },
 ];
 
-const interactionFeed = [
-  { title: 'Warfarin + Aspirin', severity: 'Contraindicated', tone: 'bg-[#ffe2e2] text-[#b42318]' },
-  { title: 'Omeprazole + Clopidogrel', severity: 'Major', tone: 'bg-[#ffe9d6] text-[#b54708]' },
-  { title: 'Simvastatin + Amiodarone', severity: 'Moderate', tone: 'bg-[#fff6cc] text-[#93370d]' },
-];
+function getSeverityTone(severityLevel) {
+  switch (severityLevel) {
+    case 'critical':
+      return 'bg-[#ffe2e2] text-[#b42318]';
+    case 'major':
+      return 'bg-[#ffe9d6] text-[#b54708]';
+    case 'moderate':
+      return 'bg-[#fff6cc] text-[#93370d]';
+    default:
+      return 'bg-[#eaf8ee] text-[#15803d]';
+  }
+}
 
 export default function Dashboard() {
+  const { supabase, session } = useSupabaseClient();
+  const [latestChecks, setLatestChecks] = useState([]);
+  const [alertCount, setAlertCount] = useState(0);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      if (!supabase || !session?.user) {
+        setLatestChecks([]);
+        setAlertCount(0);
+        return;
+      }
+
+      const { data, count } = await supabase
+        .from('scan_history')
+        .select('id, created_at, drugs_detected, fda_warning, severity_level', { count: 'exact' })
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      setLatestChecks(data ?? []);
+      setAlertCount(count ?? 0);
+    };
+
+    loadDashboardData();
+  }, [session, supabase]);
+
   return (
     <div className="space-y-4">
       {/* New Hero Scan Card */}
@@ -120,25 +155,43 @@ export default function Dashboard() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#8b6fd6]">Interaction history</p>
             <h2 className="mt-1 text-lg font-semibold text-[#34214f]">Latest safety checks</h2>
           </div>
-          <span className="text-sm font-semibold text-[#7f6b9d]">3 alerts</span>
+          <span className="text-sm font-semibold text-[#7f6b9d]">{alertCount} alerts</span>
         </div>
 
         <div className="mt-4 space-y-3">
-          {interactionFeed.map((item) => (
+          {latestChecks.length > 0 ? latestChecks.map((item) => {
+            const warningText = item.fda_warning || 'No warning recorded.';
+            const severityLabel = item.severity_level || 'none';
+
+            return (
             <motion.div
-              key={item.title}
+              key={item.id}
               whileHover={{ y: -2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
               className="flex items-start justify-between rounded-[1.35rem] border border-[#efe6ff] bg-white/80 px-3 py-3"
             >
               <div>
-                <p className="text-sm font-semibold text-[#34214f]">{item.title}</p>
-                <p className="mt-1 text-xs text-[#7f6b9d]">Cross-checked with FDA and DailyMed</p>
+                <p className="text-sm font-semibold text-[#34214f]">
+                  {Array.isArray(item.drugs_detected) && item.drugs_detected.length > 0
+                    ? item.drugs_detected.join(' + ')
+                    : 'Saved scan'}
+                </p>
+                <p className="mt-1 text-xs text-[#7f6b9d]">
+                  {new Date(item.created_at).toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-[#7f6b9d] line-clamp-2">
+                  {warningText}
+                </p>
               </div>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.tone}`}>
-                {item.severity}
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getSeverityTone(severityLabel)}`}>
+                {severityLabel}
               </span>
             </motion.div>
-          ))}
+            );
+          }) : (
+            <div className="rounded-[1.35rem] border border-[#efe6ff] bg-white/80 px-3 py-4 text-sm text-[#7f6b9d]">
+              Sign in and run a scan to see real interaction history here.
+            </div>
+          )}
         </div>
       </section>
     </div>

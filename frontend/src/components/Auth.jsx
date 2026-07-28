@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useSupabaseClient } from '../supabaseClient.jsx';
 import { Lock } from 'lucide-react'; // Added decorative icon to match other pages
 
