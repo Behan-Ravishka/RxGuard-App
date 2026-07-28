@@ -16,9 +16,12 @@ export default function Analyzing() {
 
     const triggerAI = async () => {
       try {
-        // Send the queued Base64 images to the backend for concurrent OCR.
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-        const response = await fetch(`${API_URL}/api/analyze`, {
+        // Grab the URL and cleanly remove any accidental trailing slashes
+        const RAW_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const CLEAN_URL = RAW_URL.replace(/\/$/, ""); 
+        
+        // Now this will always safely form: https://domain.com/api/analyze
+        const response = await fetch(`${CLEAN_URL}/api/analyze`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
