@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AlertCircle, Keyboard, Pill, Search } from 'lucide-react';
 
 export default function ManualEntry() {
   const navigate = useNavigate();
@@ -62,76 +64,125 @@ export default function ManualEntry() {
   };
 
   return (
-    <div className="flex flex-col h-full space-y-6 pt-6">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-5 px-2 py-4">
       
       {/* Toast Notification for Camera Failures */}
-      {toastMessage && (
-        <div className="bg-severity-orange text-white p-4 rounded-xl shadow-lg flex items-center space-x-3 animate-bounce">
-          <span className="text-2xl">⚠️</span>
-          <p className="text-sm font-semibold">{toastMessage}</p>
-        </div>
-      )}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div 
+            initial={{ opacity: 0, y: -15, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="flex items-center gap-3 rounded-[1.25rem] border border-amber-200/60 bg-amber-50/80 p-4 text-amber-700 shadow-sm backdrop-blur-md"
+          >
+            <AlertCircle size={20} className="shrink-0 text-amber-500" />
+            <p className="text-sm font-semibold leading-snug">{toastMessage}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="bg-gray-900 rounded-xl p-6 border border-gray-700 shadow-md flex-grow">
-        <h2 className="text-xl font-bold mb-2">Manual Entry</h2>
-        <p className="text-sm text-gray-400 mb-6">
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex-grow rounded-[1.75rem] border border-white/60 bg-gradient-to-br from-[#f8f0ff] via-[#f1e6ff] to-[#eaddff] p-6 shadow-[0_8px_30px_-12px_rgba(139,92,246,0.15)] backdrop-blur-xl"
+      >
+        <div className="mb-6 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-[#8b5cf6] to-[#7c3aed] text-white shadow-lg shadow-purple-500/25">
+            <Keyboard size={22} strokeWidth={1.5} />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-[#201c45]">Manual Entry</h2>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b6fd6] mt-1">
+              Direct input mode
+            </p>
+          </div>
+        </div>
+        
+        <p className="mb-6 text-sm leading-relaxed text-[#6a5a83]">
           Type the names of the medications. Our system will auto-suggest the generic normalized names.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           {/* Drug 1 Input */}
           <div className="relative">
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.2em] text-[#7f6b9d]">
               Medication 1
             </label>
-            <input 
-              type="text" 
-              value={drug1}
-              onChange={(e) => setDrug1(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg p-4 text-white focus:outline-none focus:border-blue-500 transition-colors"
-              placeholder="e.g., Aspirin"
-              required
-            />
-            {suggestion1 && (
-              <div 
-                onClick={() => { setDrug1(suggestion1); setSuggestion1(null); }}
-                className="absolute z-10 w-full mt-1 bg-blue-900 border border-blue-500 text-blue-100 p-3 rounded-lg text-sm cursor-pointer shadow-lg hover:bg-blue-800"
-              >
-                Did you mean: <span className="font-bold capitalize">{suggestion1}</span>?
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-4 text-[#a79bbd]">
+                <Pill size={18} />
               </div>
-            )}
+              <input 
+                type="text" 
+                value={drug1}
+                onChange={(e) => setDrug1(e.target.value)}
+                className="w-full rounded-[1.25rem] border border-white/60 bg-white/60 py-3.5 pl-11 pr-4 text-[#201c45] outline-none backdrop-blur-md transition-all placeholder:text-[#a79bbd] focus:border-[#8b5cf6] focus:bg-white/90 focus:ring-2 focus:ring-[#8b5cf6]/20"
+                placeholder="e.g., Aspirin"
+                required
+              />
+            </div>
+            
+            <AnimatePresence>
+              {suggestion1 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  onClick={() => { setDrug1(suggestion1); setSuggestion1(null); }}
+                  className="absolute z-20 mt-2 flex w-full cursor-pointer items-center gap-2 rounded-[1rem] border border-[#dfd0ff] bg-white/95 p-3.5 text-sm font-medium text-[#4c2c97] shadow-lg backdrop-blur-md transition-colors hover:bg-[#f4ebff]"
+                >
+                  <Search size={16} className="text-[#8b5cf6]" />
+                  <span>Did you mean: <span className="font-bold capitalize">{suggestion1}</span>?</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Drug 2 Input */}
           <div className="relative">
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
-              Medication 2 (Optional)
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.2em] text-[#7f6b9d]">
+              Medication 2 <span className="opacity-60">(Optional)</span>
             </label>
-            <input 
-              type="text" 
-              value={drug2}
-              onChange={(e) => setDrug2(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg p-4 text-white focus:outline-none focus:border-blue-500 transition-colors"
-              placeholder="e.g., Warfarin"
-            />
-            {suggestion2 && (
-              <div 
-                onClick={() => { setDrug2(suggestion2); setSuggestion2(null); }}
-                className="absolute z-10 w-full mt-1 bg-blue-900 border border-blue-500 text-blue-100 p-3 rounded-lg text-sm cursor-pointer shadow-lg hover:bg-blue-800"
-              >
-                Did you mean: <span className="font-bold capitalize">{suggestion2}</span>?
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-4 text-[#a79bbd]">
+                <Pill size={18} />
               </div>
-            )}
+              <input 
+                type="text" 
+                value={drug2}
+                onChange={(e) => setDrug2(e.target.value)}
+                className="w-full rounded-[1.25rem] border border-white/60 bg-white/60 py-3.5 pl-11 pr-4 text-[#201c45] outline-none backdrop-blur-md transition-all placeholder:text-[#a79bbd] focus:border-[#8b5cf6] focus:bg-white/90 focus:ring-2 focus:ring-[#8b5cf6]/20"
+                placeholder="e.g., Warfarin"
+              />
+            </div>
+
+            <AnimatePresence>
+              {suggestion2 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  onClick={() => { setDrug2(suggestion2); setSuggestion2(null); }}
+                  className="absolute z-10 mt-2 flex w-full cursor-pointer items-center gap-2 rounded-[1rem] border border-[#dfd0ff] bg-white/95 p-3.5 text-sm font-medium text-[#4c2c97] shadow-lg backdrop-blur-md transition-colors hover:bg-[#f4ebff]"
+                >
+                  <Search size={16} className="text-[#8b5cf6]" />
+                  <span>Did you mean: <span className="font-bold capitalize">{suggestion2}</span>?</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          <button 
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
             type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-colors mt-8"
+            className="mt-8 w-full rounded-2xl bg-[#8b5cf6] px-4 py-4 font-bold text-white shadow-md shadow-purple-500/25 transition-all hover:bg-[#7c3aed]"
           >
             Check Interactions
-          </button>
+          </motion.button>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 }

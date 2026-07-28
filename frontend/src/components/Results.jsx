@@ -11,6 +11,17 @@ export default function Results() {
   const { supabase, session } = useSupabaseClient();
   
   const result = location.state?.result;
+  const normalizedDrugKey = Array.isArray(result?.drugs_detected)
+    ? [...new Set(
+      result.drugs_detected
+        .map((drug) => (typeof drug === 'string' ? drug.trim() : ''))
+        .filter(Boolean)
+        .map((drug) => drug.toLowerCase()),
+    )].sort().join('|')
+    : '';
+
+  const warningText = (result?.fda_warning ?? result?.fda_summary ?? '').trim();
+  const saveSignature = [session?.user?.id ?? 'guest', normalizedDrugKey, warningText.toLowerCase()].join('::');
 
   const getSeverityLevel = (warning) => {
     if (!warning || warning.trim() === '') {
@@ -40,24 +51,49 @@ export default function Results() {
         return;
       }
 
+      const normalizedDrugs = normalizedDrugKey ? normalizedDrugKey.split('|') : [];
+
+      const storageKey = `rxguard.saved-result.${saveSignature}`;
+
+      if (window.sessionStorage.getItem(storageKey) === 'saved') {
+        saveAttemptedRef.current = true;
+        return;
+      }
+
+      const { data: existingRows, error: existingError } = await supabase
+        .from('scan_history')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('fda_warning', warningText)
+        .contains('drugs_detected', normalizedDrugs)
+        .limit(1);
+
+      if (!existingError && Array.isArray(existingRows) && existingRows.length > 0) {
+        window.sessionStorage.setItem(storageKey, 'saved');
+        saveAttemptedRef.current = true;
+        return;
+      }
+
       saveAttemptedRef.current = true;
 
       const payload = {
         user_id: session.user.id,
-        drugs_detected: Array.isArray(result.drugs_detected) ? result.drugs_detected : [],
-        fda_warning: result.fda_warning ?? result.fda_summary ?? '',
-        severity_level: getSeverityLevel(result.fda_warning ?? result.fda_summary ?? ''),
+        drugs_detected: normalizedDrugs,
+        fda_warning: warningText,
+        severity_level: getSeverityLevel(warningText),
       };
 
       const { error } = await supabase.from('scan_history').insert([payload]);
 
       if (error) {
         console.error('[frontend/components/Results.jsx] Failed to save scan history:', error);
+      } else {
+        window.sessionStorage.setItem(storageKey, 'saved');
       }
     };
 
     saveResultToHistory();
-  }, [result, session, supabase]);
+  }, [result, session, supabase, saveSignature, normalizedDrugKey, warningText]);
 
   if (!result) {
     return (
