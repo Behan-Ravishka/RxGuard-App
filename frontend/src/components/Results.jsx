@@ -1,34 +1,52 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
+import { useSupabaseClient } from '../supabaseClient.jsx';
+import { motion } from 'framer-motion';
+import { AlertOctagon, AlertTriangle, Info, CheckCircle2, Link as LinkIcon, ExternalLink } from 'lucide-react';
 
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
   const saveAttemptedRef = useRef(false);
+  const { supabase, session } = useSupabaseClient();
   
   const result = location.state?.result;
 
+  const getSeverityLevel = (warning) => {
+    if (!warning || warning.trim() === '') {
+      return 'none';
+    }
+
+    const text = warning.toLowerCase();
+
+    if (text.includes('contraindicated') || text.includes('severe')) {
+      return 'critical';
+    }
+
+    if (text.includes('major')) {
+      return 'major';
+    }
+
+    if (text.includes('moderate')) {
+      return 'moderate';
+    }
+
+    return 'minor';
+  };
+
   useEffect(() => {
     const saveResultToHistory = async () => {
-      if (!result || saveAttemptedRef.current || !supabase) {
+      if (!result || saveAttemptedRef.current || !supabase || !session?.user) {
         return;
       }
 
       saveAttemptedRef.current = true;
 
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-
-      if (!user) {
-        return;
-      }
-
       const payload = {
-        user_id: user.id,
-        status: result.status ?? 'success',
+        user_id: session.user.id,
         drugs_detected: Array.isArray(result.drugs_detected) ? result.drugs_detected : [],
-        fda_warning: result.fda_warning ?? '',
+        fda_warning: result.fda_warning ?? result.fda_summary ?? '',
+        severity_level: getSeverityLevel(result.fda_warning ?? result.fda_summary ?? ''),
       };
 
       const { error } = await supabase.from('scan_history').insert([payload]);
@@ -39,13 +57,16 @@ export default function Results() {
     };
 
     saveResultToHistory();
-  }, [result]);
+  }, [result, session, supabase]);
 
   if (!result) {
     return (
-      <div className="flex flex-col items-center justify-center h-full pt-20">
-        <p className="text-gray-400 mb-4">No analysis data found.</p>
-        <button onClick={() => navigate('/')} className="bg-blue-600 px-6 py-2 rounded-lg font-semibold">
+      <div className="flex h-[70vh] flex-col items-center justify-center text-center px-4">
+        <p className="mb-4 text-lg font-bold text-[#201c45]">No analysis data found.</p>
+        <button 
+          onClick={() => navigate('/')} 
+          className="rounded-2xl bg-[#8b5cf6] px-6 py-3 font-semibold text-white shadow-md shadow-purple-500/25 transition-all hover:bg-[#7c3aed] active:scale-95"
+        >
           Scan Prescription
         </button>
       </div>
@@ -56,24 +77,25 @@ export default function Results() {
 
   const getSeverityUI = (warning) => {
     if (!warning || warning.trim() === "") {
-      return { label: 'SAFE / NO INTERACTION', bgColor: 'bg-severity-green', icon: '✅' };
+      return { label: 'SAFE / NO INTERACTION', bg: 'from-emerald-400 to-emerald-500 shadow-emerald-500/30', Icon: CheckCircle2 };
     }
     
     const text = warning.toLowerCase();
     if (text.includes('contraindicated') || text.includes('severe')) {
-      return { label: 'CONTRAINDICATED', bgColor: 'bg-severity-red', icon: '🛑' };
+      return { label: 'CONTRAINDICATED', bg: 'from-rose-500 to-rose-600 shadow-rose-500/30', Icon: AlertOctagon };
     }
     if (text.includes('major')) {
-      return { label: 'MAJOR INTERACTION', bgColor: 'bg-severity-orange', icon: '⚠️' };
+      return { label: 'MAJOR INTERACTION', bg: 'from-orange-500 to-orange-600 shadow-orange-500/30', Icon: AlertTriangle };
     }
     if (text.includes('moderate')) {
-      return { label: 'MODERATE INTERACTION', bgColor: 'bg-severity-yellow', icon: '🟡' };
+      return { label: 'MODERATE INTERACTION', bg: 'from-amber-400 to-amber-500 shadow-amber-500/30', Icon: AlertTriangle };
     }
     
-    return { label: 'MINOR INTERACTION', bgColor: 'bg-severity-green', icon: 'ℹ️' };
+    return { label: 'MINOR INTERACTION', bg: 'from-emerald-400 to-emerald-500 shadow-emerald-500/30', Icon: Info };
   };
 
   const severityUI = getSeverityUI(fda_summary || fda_warning);
+  const StatusIcon = severityUI.Icon;
 
   const handleReadFullDetails = () => {
     navigate('/details', {
@@ -84,121 +106,152 @@ export default function Results() {
   };
 
   return (
-    <div className="flex flex-col h-full space-y-5 pb-8 mt-2">
+    <div className="flex flex-col h-full space-y-4 pb-8 mt-2 px-1">
       
       {/* 1. Primary Alert Card */}
-      <div className={`${severityUI.bgColor} text-white p-5 rounded-xl shadow-lg flex items-center space-x-4`}>
-        <span className="text-4xl drop-shadow-md">{severityUI.icon}</span>
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className={`bg-gradient-to-br ${severityUI.bg} text-white p-5 rounded-[1.75rem] shadow-lg flex items-center space-x-4`}
+      >
+        <div className="flex-shrink-0 bg-white/20 p-3 rounded-2xl backdrop-blur-sm">
+          <StatusIcon size={32} strokeWidth={2} className="drop-shadow-md" />
+        </div>
         <div>
-          <h2 className="text-lg font-bold tracking-wide">{severityUI.label}</h2>
-          <p className="text-xs opacity-90 mt-1 font-medium">
-            {status === "manual_entry_required" ? "Verification Required" : "Automated Safety Check Complete"}
+          <h2 className="text-lg font-black tracking-wide drop-shadow-sm">{severityUI.label}</h2>
+          <p className="text-[11px] font-bold uppercase tracking-wider opacity-90 mt-1 drop-shadow-sm">
+            {status === "manual_entry_required" ? "Verification Required" : "Safety Check Complete"}
           </p>
         </div>
-      </div>
+      </motion.div>
 
       {/* 2. Medication Breakdown */}
-      <div className="bg-gray-900 rounded-xl p-5 border border-gray-700 shadow-md">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1 }}
+        className="rounded-[1.75rem] border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md"
+      >
+        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b6fd6] mb-4">
           Extracted Medications
         </h3>
         
         {drugs_detected.length > 0 ? (
           <ul className="space-y-3">
             {drugs_detected.map((drug, index) => (
-              <li key={index} className="flex items-center space-x-3 bg-gray-800 p-3 rounded-lg border border-gray-700">
-                <span className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold text-gray-300">
+              <li key={index} className="flex items-center space-x-4 bg-white/60 p-3 rounded-[1.25rem] border border-white/40 shadow-sm">
+                <span className="w-8 h-8 rounded-full bg-[#f5edff] flex items-center justify-center text-[13px] font-black text-[#5b3bbb]">
                   {index + 1}
                 </span>
-                <span className="text-lg font-semibold text-white capitalize">{drug}</span>
+                <span className="text-base font-bold text-[#201c45] capitalize">{drug}</span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-gray-400 italic">No valid medications detected.</p>
+          <p className="text-sm text-[#7f6b9d] italic">No valid medications detected.</p>
         )}
-      </div>
+      </motion.div>
 
       {/* 3. Interaction Details */}
-      <div className="bg-gray-900 rounded-xl p-5 border border-gray-700 shadow-md">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2 }}
+        className="rounded-[1.75rem] border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md"
+      >
+        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b6fd6] mb-3">
           FDA Interaction Details
         </h3>
         
         {fda_summary ? (
           <>
-            <p className="text-sm text-gray-300 leading-relaxed font-medium">
+            <p className="text-sm text-[#4b5563] leading-relaxed font-medium">
               {fda_summary}
             </p>
 
             {fda_raw_text ? (
               <button
                 onClick={handleReadFullDetails}
-                className="mt-4 inline-flex items-center justify-center rounded-full border border-gray-600 bg-gray-800 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors hover:bg-gray-700"
+                className="mt-5 w-full flex items-center justify-center gap-2 rounded-2xl border border-[#dfd0ff] bg-white/80 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.1em] text-[#4c2c97] transition-all hover:bg-white active:scale-95 shadow-sm"
               >
-                Read Full Official FDA Documentation
+                Read Full Official Document
               </button>
             ) : null}
           </>
         ) : (
-          <p className="text-sm text-gray-400 italic">
+          <p className="text-sm text-[#7f6b9d] italic">
             No known adverse interactions found between these medications based on current openFDA data.
           </p>
         )}
-      </div>
+      </motion.div>
 
-      {/* 4. NEW: Source Citation Portal */}
-      <div className="bg-gray-950 rounded-xl p-5 border border-gray-800 shadow-inner">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center space-x-2">
-          <span>🔗</span>
-          <span>Verified Sources</span>
+      {/* 4. Verified Sources */}
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.3 }}
+        className="rounded-[1.75rem] border border-white/50 bg-gradient-to-br from-[#f8f0ff] via-[#f1e6ff] to-[#eaddff] p-5 shadow-sm backdrop-blur-md"
+      >
+        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b6fd6] mb-3 flex items-center gap-2">
+          <LinkIcon size={14} />
+          Verified Sources
         </h3>
-        <p className="text-xs text-gray-400 mb-3">
+        <p className="text-xs text-[#6a5a83] mb-4">
           Data dynamically cross-referenced using official government regulatory databases:
         </p>
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           <li>
             <a 
               href="https://open.fda.gov/apis/drug/label/" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 flex items-center"
+              className="text-[11px] font-bold text-[#8b5cf6] hover:text-[#7c3aed] flex items-center gap-1.5"
             >
-              U.S. openFDA Structured Product Labeling (SPL) API
+              U.S. openFDA Structured Product Labeling (SPL)
+              <ExternalLink size={12} />
             </a>
           </li>
-          {/* Dynamically create a DailyMed search link for each drug found */}
           {drugs_detected.map((drug, index) => (
             <li key={index}>
               <a 
                 href={`https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query=${encodeURIComponent(drug)}`} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 flex items-center capitalize"
+                className="text-[11px] font-bold text-[#8b5cf6] hover:text-[#7c3aed] flex items-center gap-1.5 capitalize"
               >
                 NIH DailyMed Database: {drug}
+                <ExternalLink size={12} />
               </a>
             </li>
           ))}
         </ul>
-      </div>
+      </motion.div>
 
       {/* Try Again Button */}
-      <button 
+      <motion.button 
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.4 }}
         onClick={() => navigate('/')} 
-        className="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-4 rounded-xl border border-gray-600 transition-colors mt-2"
+        className="w-full mt-2 rounded-2xl bg-[#8b5cf6] px-4 py-4 font-bold text-white shadow-md shadow-purple-500/25 transition-all hover:bg-[#7c3aed] active:scale-95"
       >
         Scan Another Prescription
-      </button>
+      </motion.button>
 
-      {/* 5. NEW: Legal Disclaimer */}
-      <div className="text-center px-4 pt-2">
-        <p className="text-[10px] leading-tight text-gray-500 uppercase tracking-wide">
+      {/* 5. Legal Disclaimer */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.5 }}
+        className="text-center px-4 pt-3"
+      >
+        <p className="text-[9px] leading-relaxed text-[#a79bbd] uppercase tracking-[0.1em] font-bold">
           ⚠️ RxGuard is a safety companion, not a diagnostic tool. 
           <br className="my-1" />
           Always consult a healthcare professional before altering medication.
         </p>
-      </div>
+      </motion.div>
 
     </div>
   );

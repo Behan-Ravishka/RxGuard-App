@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import AgentStatus from './AgentStatus';
 
 export default function Analyzing() {
@@ -52,9 +53,12 @@ export default function Analyzing() {
 
   if (images.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full pt-20">
-        <p>No image detected.</p>
-        <button onClick={() => navigate('/')} className="mt-4 bg-blue-600 px-4 py-2 rounded-lg font-semibold">
+      <div className="flex h-[70vh] flex-col items-center justify-center text-center px-4">
+        <p className="text-lg font-bold text-[#201c45]">No image detected.</p>
+        <button 
+          onClick={() => navigate('/')} 
+          className="mt-4 rounded-2xl bg-[#8b5cf6] px-6 py-3 font-semibold text-white shadow-md shadow-purple-500/25 transition-all hover:bg-[#7c3aed] active:scale-95"
+        >
           Go Back
         </button>
       </div>
@@ -62,22 +66,33 @@ export default function Analyzing() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-full pt-6 space-y-6">
-      
-      <div className="flex flex-wrap justify-center gap-3 px-4">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex flex-col items-center justify-center pt-8 space-y-6"
+    >
+      {/* Display captured images in sleek glass frames */}
+      <div className="flex flex-wrap justify-center gap-4 px-4">
         {images.map((image, index) => (
-          <img 
+          <motion.div
             key={`${index}-${image.slice(0, 24)}`}
-            src={image} 
-            alt={`Captured ${index + 1}`} 
-            className="w-24 h-24 object-cover border-2 border-gray-700 rounded-lg shadow-lg opacity-50" 
-          />
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: index * 0.1 }}
+            className="overflow-hidden rounded-[1.25rem] border border-white/60 bg-white/40 p-1.5 shadow-sm backdrop-blur-md"
+          >
+            <img 
+              src={image} 
+              alt={`Captured ${index + 1}`} 
+              className="w-24 h-24 rounded-[1rem] object-cover opacity-80" 
+            />
+          </motion.div>
         ))}
       </div>
       
       {/* The workflow visualizer */}
       <AgentStatus />
 
-    </div>
+    </motion.div>
   );
 }

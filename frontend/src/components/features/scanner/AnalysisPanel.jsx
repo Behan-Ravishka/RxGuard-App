@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle2, ChevronDown } from 'lucide-react';
 
 export default function AnalysisPanel({ result, onOpenDetails }) {
   const severity = result?.fda_warning?.toLowerCase?.() || '';
