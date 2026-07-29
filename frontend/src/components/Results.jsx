@@ -51,14 +51,17 @@ export default function Results() {
         return;
       }
 
-      const normalizedDrugs = normalizedDrugKey ? normalizedDrugKey.split('|') : [];
-
       const storageKey = `rxguard.saved-result.${saveSignature}`;
 
       if (window.sessionStorage.getItem(storageKey) === 'saved') {
         saveAttemptedRef.current = true;
         return;
       }
+
+      // Prevent concurrent executions (e.g., React StrictMode double-invocations)
+      saveAttemptedRef.current = true;
+
+      const normalizedDrugs = normalizedDrugKey ? normalizedDrugKey.split('|') : [];
 
       const { data: existingRows, error: existingError } = await supabase
         .from('scan_history')
@@ -70,11 +73,8 @@ export default function Results() {
 
       if (!existingError && Array.isArray(existingRows) && existingRows.length > 0) {
         window.sessionStorage.setItem(storageKey, 'saved');
-        saveAttemptedRef.current = true;
         return;
       }
-
-      saveAttemptedRef.current = true;
 
       const payload = {
         user_id: session.user.id,
