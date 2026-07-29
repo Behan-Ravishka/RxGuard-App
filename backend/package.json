@@ -20,7 +20,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "langchain": "^1.5.3",
+    "langchain": "^0.1.37",
     "multer": "^2.2.0"
   }
 }
