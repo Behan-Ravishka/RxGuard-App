@@ -1,7 +1,56 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Brain, TrendingUp, ShieldAlert, Sparkles, Lock } from 'lucide-react';
+import { Brain, TrendingUp, ShieldAlert, Sparkles, Lock, Activity, Heart } from 'lucide-react';
+import { useSupabaseClient } from '../supabaseClient.jsx';
+
+const IconMap = {
+  TrendingUp,
+  ShieldAlert,
+  Sparkles,
+  Brain,
+  Activity,
+  Heart
+};
 
 export default function Insights() {
+  const { session } = useSupabaseClient();
+  const [loading, setLoading] = useState(true);
+  const [insights, setInsights] = useState([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchInsights = async () => {
+      if (!session?.access_token) return;
+
+      try {
+        setLoading(true);
+        const response = await fetch('http://localhost:3000/api/insights', {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch insights');
+        }
+        
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.insights) {
+          setInsights(data.insights);
+        } else {
+          throw new Error('Invalid response format');
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInsights();
+  }, [session]);
+
   return (
     <div className="space-y-4">
       
@@ -41,35 +90,66 @@ export default function Insights() {
             <h2 className="text-base font-bold text-[#201c45]">Predictive Analysis</h2>
           </div>
           <span className="flex items-center gap-1 rounded-full bg-[#f2ebff] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#5b3bbb]">
-            <Lock size={10} /> Phase 2
+            <Lock size={10} /> Active
           </span>
         </div>
         
         <p className="text-sm leading-relaxed text-[#6a5a83] mb-5">
-          Integrated Machine Learning models will analyze 3-6 months of user timeline data to flag early health risk patterns before symptoms emerge.
+          Integrated Machine Learning models are actively analyzing your scan history to flag early health risk patterns before symptoms emerge.
         </p>
 
-        {/* Mocked Upcoming ML Features */}
-        <div className="space-y-3 opacity-60">
-          <div className="flex items-center gap-3 rounded-[1.25rem] border border-dashed border-[#dfd0ff] bg-white/40 p-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-500">
-              <TrendingUp size={20} />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#34214f]">Rising Cholesterol Alert</h3>
-              <p className="text-xs text-[#7f6b9d]">Based on statin efficacy trends</p>
-            </div>
+        {error && (
+          <div className="p-3 mb-4 text-sm text-rose-500 bg-rose-50 rounded-xl border border-rose-100">
+            Error loading insights: {error}
           </div>
-          
-          <div className="flex items-center gap-3 rounded-[1.25rem] border border-dashed border-[#dfd0ff] bg-white/40 p-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-500">
-              <ShieldAlert size={20} />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#34214f]">Vitamin Deficiency Risk</h3>
-              <p className="text-xs text-[#7f6b9d]">Correlated with recent prescriptions</p>
-            </div>
-          </div>
+        )}
+
+        <div className="space-y-3">
+          {loading ? (
+            // Glassmorphism Loading Skeletons
+            <>
+              {[1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-3 rounded-[1.25rem] border border-dashed border-[#dfd0ff] bg-white/40 p-3 animate-pulse">
+                  <div className="h-10 w-10 rounded-xl bg-[#dfd0ff]/50"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 w-1/2 rounded bg-[#dfd0ff]/50"></div>
+                    <div className="h-2.5 w-3/4 rounded bg-[#dfd0ff]/30"></div>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            // Dynamic AI Insights
+            insights.map((insight, index) => {
+              const IconComponent = IconMap[insight.icon] || Sparkles;
+              const colorClasses = {
+                rose: "bg-rose-50 text-rose-500",
+                amber: "bg-amber-50 text-amber-500",
+                indigo: "bg-indigo-50 text-indigo-500",
+                emerald: "bg-emerald-50 text-emerald-500",
+                blue: "bg-blue-50 text-blue-500",
+                purple: "bg-purple-50 text-purple-500"
+              }[insight.color] || "bg-indigo-50 text-indigo-500";
+
+              return (
+                <motion.div 
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                  key={index} 
+                  className="flex items-center gap-3 rounded-[1.25rem] border border-solid border-[#dfd0ff] bg-white p-3 shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${colorClasses}`}>
+                    <IconComponent size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-[#34214f]">{insight.title}</h3>
+                    <p className="text-xs text-[#7f6b9d] leading-snug mt-0.5">{insight.description}</p>
+                  </div>
+                </motion.div>
+              );
+            })
+          )}
         </div>
       </motion.section>
       

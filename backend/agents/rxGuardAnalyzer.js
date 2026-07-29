@@ -3,13 +3,16 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { initializeAgentExecutorWithOptions } from "langchain/agents";
 import { visionClient } from "../models/vision.js";
 
-const DEFAULT_AGENT_MODEL = process.env.GEMINI_AGENT_MODEL || "gemini-2.5-flash";
-const DEFAULT_VISION_MODEL = process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash";
+const DEFAULT_AGENT_MODEL = process.env.GEMINI_AGENT_MODEL || "gemini-3.1-flash-lite";
+const DEFAULT_VISION_MODEL = process.env.GEMINI_VISION_MODEL || "gemini-3.1-flash-lite";
 const PYTHON_NORMALIZER_URL =
   process.env.PYTHON_NORMALIZER_URL ||
   process.env.PYTHON_URL ||
   "http://127.0.0.1:8000";
 const FDA_API_BASE_URL = process.env.FDA_API_BASE_URL || "https://api.fda.gov";
+
+const IMAGE_STORE = new Map();
+let nextImageId = 0;
 
 function safeJsonParse(value) {
   if (typeof value !== "string") {
@@ -113,11 +116,13 @@ function parseImageInput(image) {
   }
 
   const trimmedImage = image.trim();
-  const dataUrlMatch = trimmedImage.match(/^data:([^;]+);base64,(.*)$/s);
+  const dataUrlMatch = trimmedImage.match(/^data:(.*?);base64,(.*)$/s);
 
   if (dataUrlMatch) {
+    let mimeType = dataUrlMatch[1].split(';')[0];
+    if (!mimeType) mimeType = "image/jpeg";
     return {
-      mimeType: dataUrlMatch[1] || "image/jpeg",
+      mimeType,
       data: dataUrlMatch[2],
     };
   }
@@ -169,32 +174,48 @@ function getWorstSeverityLabel(text) {
   return "MINOR INTERACTION";
 }
 
-export const visionOcrTool = new DynamicTool({
+export const createVisionOcrTool = () => new DynamicTool({
   name: "vision_ocr_tool",
   description:
-    "Use this first. Input must be a single base64 prescription image string. Extract handwritten or printed medication names from the image.",
-  func: async (input) => {
+    "Use this first. Extract handwritten or printed medication names from the images. Input should be a comma-separated list of Image IDs to analyze.",
+  func: async (toolInput) => {
     try {
-      const parsedImage = parseImageInput(input);
+      const ids = toolInput.split(',').map(id => id.trim()).map(Number).filter(id => !isNaN(id));
 
-      if (!parsedImage) {
+      if (ids.length === 0) {
         return JSON.stringify({
           success: false,
-          drugs_detected: [],
-          manual_entry_required: true,
-          raw_text: "",
-          error: "No valid image provided",
+          error: "No valid image IDs provided in tool input.",
         });
       }
 
-      const response = await visionClient.models.generateContent({
-        model: DEFAULT_VISION_MODEL,
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `
+      let allDrugs = [];
+      let allText = [];
+
+      for (const id of ids) {
+        const img = IMAGE_STORE.get(id);
+        if (!img) {
+          console.warn(`[RxGuard Agent] vision_ocr_tool: Image ID ${id} not found in store.`);
+          continue;
+        }
+
+        const parsedImage = parseImageInput(img);
+        if (!parsedImage) {
+          console.warn(`[RxGuard Agent] vision_ocr_tool: Failed to parse Image ID ${id}.`);
+          continue;
+        }
+
+        console.log(`[RxGuard Agent] vision_ocr_tool: Sending Image ID ${id} to Gemini.`);
+        console.log(`[RxGuard Agent] vision_ocr_tool: MimeType: ${parsedImage.mimeType}, Base64 Length: ${parsedImage.data.length}`);
+
+        const response = await visionClient.models.generateContent({
+          model: DEFAULT_VISION_MODEL,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `
 Extract medicine names from this prescription image.
 
 Rules:
@@ -208,26 +229,31 @@ Format:
   "drugs": []
 }
 `,
-              },
-              {
-                inlineData: {
-                  mimeType: parsedImage.mimeType,
-                  data: parsedImage.data,
                 },
-              },
-            ],
-          },
-        ],
-      });
+                {
+                  inlineData: {
+                    mimeType: parsedImage.mimeType,
+                    data: parsedImage.data,
+                  },
+                },
+              ],
+            },
+          ],
+        });
 
-      const parsedResponse = safeJsonParse(response.text);
-      const drugsDetected = dedupeDrugList(extractDrugList(parsedResponse));
+        const parsedResponse = safeJsonParse(response.text);
+        const drugsDetected = extractDrugList(parsedResponse);
+        allDrugs.push(...drugsDetected);
+        allText.push(typeof response.text === "string" ? response.text : "");
+      }
+
+      const finalDrugs = dedupeDrugList(allDrugs);
 
       return JSON.stringify({
         success: true,
-        drugs_detected: drugsDetected,
-        manual_entry_required: drugsDetected.length === 0,
-        raw_text: typeof response.text === "string" ? response.text : "",
+        drugs_detected: finalDrugs,
+        manual_entry_required: finalDrugs.length === 0,
+        raw_text: allText.join("\n"),
       });
     } catch (error) {
       console.error("[backend/agents/rxGuardAnalyzer.js] vision_ocr_tool failed:", error);
@@ -419,38 +445,46 @@ export const fdaDatabaseTool = new DynamicTool({
   },
 });
 
-let agentExecutorPromise;
-
 async function getAgentExecutor() {
-  if (!agentExecutorPromise) {
-    const llm = new ChatGoogleGenerativeAI({
-      apiKey: process.env.GOOGLE_API_KEY,
-      model: DEFAULT_AGENT_MODEL,
-      temperature: 0,
-      maxRetries: 2,
-    });
+  const llm = new ChatGoogleGenerativeAI({
+    apiKey: process.env.GOOGLE_API_KEY,
+    model: DEFAULT_AGENT_MODEL,
+    temperature: 0,
+    maxRetries: 2,
+  });
 
-    const tools = [visionOcrTool, nameNormalizerTool, fdaDatabaseTool];
+  const originalGenerate = llm._generate.bind(llm);
+  llm._generate = async function(messages, options, runManager) {
+    for (const msg of messages) {
+      if (msg.type === undefined && typeof msg._getType === 'function') {
+        Object.defineProperty(msg, 'type', {
+          get() { return this._getType(); },
+          enumerable: true,
+          configurable: true
+        });
+      }
+    }
+    return await originalGenerate(messages, options, runManager);
+  };
 
-    agentExecutorPromise = initializeAgentExecutorWithOptions(tools, llm, {
-      agentType: "zero-shot-react-description",
-      verbose: true,
-      returnIntermediateSteps: true,
-      maxIterations: 6,
-      handleParsingErrors: true,
-    });
-  }
+  const tools = [createVisionOcrTool(), nameNormalizerTool, fdaDatabaseTool];
 
-  return agentExecutorPromise;
+  return initializeAgentExecutorWithOptions(tools, llm, {
+    agentType: "zero-shot-react-description",
+    verbose: true,
+    returnIntermediateSteps: true,
+    maxIterations: 6,
+    handleParsingErrors: true,
+  });
 }
 
-function buildAgentInput(images) {
+function buildAgentInput(imageIds) {
   return `You are the RxGuard Medical Safety Autonomous Agent.
 Your job is to analyze prescription images, normalize the extracted drug names, and check them against FDA databases for dangerous interactions.
 
 You must use your tools in a logical sequence.
 Thought Process:
-1. First, use the vision_ocr_tool to read the image.
+1. First, use the vision_ocr_tool to read the images. Input should be this exact comma-separated list of Image IDs: ${imageIds.join(', ')}
 2. Second, use the name_normalizer_tool to correct the spelling of the extracted drugs. Do not skip this step.
 3. Third, use the fda_database_tool to check the normalized drugs for interactions.
 4. Finally, synthesize the results into a final report.
@@ -461,10 +495,10 @@ Output requirements:
 - Use this exact schema:
 {
   "status": "success",
-  "drugs_detected": ["Aspirin", "Warfarin"],
-  "fda_summary": "Major interaction found. Increased risk of bleeding...",
-  "fda_raw_text": "[Full text from openFDA API]",
-  "fda_warning": "CONTRAINDICATED"
+  "drugs_detected": ["<DRUG_1>", "<DRUG_2>"],
+  "fda_summary": "<summary text from fda_database_tool>",
+  "fda_raw_text": "<raw text from fda_database_tool>",
+  "fda_warning": "<warning text from fda_database_tool>"
 }
 - If nothing readable is found, return:
 {
@@ -474,9 +508,6 @@ Output requirements:
   "fda_raw_text": "",
   "fda_warning": ""
 }
-
-Prescription images JSON array:
-${JSON.stringify(images)}
 `;
 }
 
@@ -553,9 +584,21 @@ export async function runRxGuardAgent(images) {
     };
   }
 
+  const imageIds = [];
+  for (const img of imageList) {
+    const id = nextImageId++;
+    IMAGE_STORE.set(id, img);
+    imageIds.push(id);
+  }
+
   const executor = await getAgentExecutor();
-  const agentInput = buildAgentInput(imageList);
+  const agentInput = buildAgentInput(imageIds);
   const result = await executor.invoke({ input: agentInput });
+
+  // Clean up IMAGE_STORE to prevent memory leaks
+  for (const id of imageIds) {
+    IMAGE_STORE.delete(id);
+  }
 
   logIntermediateSteps(result?.intermediateSteps);
 
