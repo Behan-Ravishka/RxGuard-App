@@ -1,16 +1,75 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSupabaseClient } from '../supabaseClient.jsx';
 import { motion } from 'framer-motion';
-import { AlertOctagon, AlertTriangle, Info, CheckCircle2, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, Info, CheckCircle2, Link as LinkIcon, ExternalLink, HeartPulse, ShieldCheck } from 'lucide-react';
+
+// Healthcare Loading Overlay Component
+function HealthcareLoader() {
+  return (
+    <div className="flex h-[75vh] flex-col items-center justify-center px-4 text-center">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4 }}
+        className="relative flex flex-col items-center justify-center rounded-[2rem] border border-white/60 bg-white/70 p-8 shadow-[0_10px_40px_-15px_rgba(139,92,246,0.2)] backdrop-blur-xl max-w-xs w-full"
+      >
+        {/* Glowing Heartbeat Centerpiece */}
+        <div className="relative flex h-20 w-20 items-center justify-center mb-6">
+          <motion.span
+            animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.1, 0.5] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute h-full w-full rounded-full bg-[#8b5cf6]/20"
+          />
+          <motion.span
+            animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0, 0.3] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+            className="absolute h-full w-full rounded-full bg-[#8b5cf6]/30"
+          />
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8b5cf6] to-[#7c3aed] text-white shadow-xl shadow-purple-500/30">
+            <HeartPulse size={32} className="animate-pulse" />
+          </div>
+        </div>
+
+        <h3 className="text-lg font-black text-[#201c45]">Analyzing Prescription</h3>
+        <p className="mt-1 text-xs font-semibold text-[#8b6fd6] uppercase tracking-wider">
+          Safety & Interaction Check
+        </p>
+
+        {/* Dynamic ECG Line Pulse */}
+        <div className="mt-6 w-full overflow-hidden rounded-full bg-[#f1e6ff] p-1">
+          <motion.div
+            initial={{ x: "-100%" }}
+            animate={{ x: "100%" }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+            className="h-2 w-1/2 rounded-full bg-gradient-to-r from-transparent via-[#8b5cf6] to-transparent shadow-[0_0_12px_#8b5cf6]"
+          />
+        </div>
+
+        <div className="mt-6 flex items-center justify-center gap-2 text-[11px] font-bold text-[#7f6b9d]">
+          <ShieldCheck size={14} className="text-[#10b981]" />
+          <span>Cross-referencing openFDA SPL</span>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
 
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
   const saveAttemptedRef = useRef(false);
   const { supabase, session } = useSupabaseClient();
-  
+  const [isPreparing, setIsPreparing] = useState(true);
+
   const result = location.state?.result;
+
+  // Short delay to allow smooth transition animation when page loads
+  useEffect(() => {
+    const timer = setTimeout(() => setIsPreparing(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
+
   const normalizedDrugKey = Array.isArray(result?.drugs_detected)
     ? [...new Set(
       result.drugs_detected
@@ -24,32 +83,17 @@ export default function Results() {
   const saveSignature = [session?.user?.id ?? 'guest', normalizedDrugKey, warningText.toLowerCase()].join('::');
 
   const getSeverityLevel = (warning) => {
-    if (!warning || warning.trim() === '') {
-      return 'none';
-    }
-
+    if (!warning || warning.trim() === '') return 'none';
     const text = warning.toLowerCase();
-
-    if (text.includes('contraindicated') || text.includes('severe')) {
-      return 'critical';
-    }
-
-    if (text.includes('major')) {
-      return 'major';
-    }
-
-    if (text.includes('moderate')) {
-      return 'moderate';
-    }
-
+    if (text.includes('contraindicated') || text.includes('severe')) return 'critical';
+    if (text.includes('major')) return 'major';
+    if (text.includes('moderate')) return 'moderate';
     return 'minor';
   };
 
   useEffect(() => {
     const saveResultToHistory = async () => {
-      if (!result || saveAttemptedRef.current || !supabase || !session?.user) {
-        return;
-      }
+      if (!result || saveAttemptedRef.current || !supabase || !session?.user) return;
 
       const storageKey = `rxguard.saved-result.${saveSignature}`;
 
@@ -58,9 +102,7 @@ export default function Results() {
         return;
       }
 
-      // Prevent concurrent executions (e.g., React StrictMode double-invocations)
       saveAttemptedRef.current = true;
-
       const normalizedDrugs = normalizedDrugKey ? normalizedDrugKey.split('|') : [];
 
       const { data: existingRows, error: existingError } = await supabase
@@ -94,6 +136,11 @@ export default function Results() {
 
     saveResultToHistory();
   }, [result, session, supabase, saveSignature, normalizedDrugKey, warningText]);
+
+  // Render Healthcare Loader during preparation
+  if (isPreparing) {
+    return <HealthcareLoader />;
+  }
 
   if (!result) {
     return (
@@ -135,9 +182,7 @@ export default function Results() {
 
   const handleReadFullDetails = () => {
     navigate('/details', {
-      state: {
-        fda_raw_text,
-      },
+      state: { fda_raw_text },
     });
   };
 
@@ -275,7 +320,7 @@ export default function Results() {
         Scan Another Prescription
       </motion.button>
 
-      {/* 5. Legal Disclaimer */}
+      {/* Legal Disclaimer */}
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
