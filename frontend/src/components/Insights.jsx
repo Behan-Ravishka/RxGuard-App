@@ -20,28 +20,44 @@ export default function Insights() {
 
   useEffect(() => {
     const fetchInsights = async () => {
-      if (!session?.access_token) return;
+      if (!session?.access_token) {
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
-        const response = await fetch('http://localhost:3000/api/insights', {
+        setError('');
+
+        const response = await fetch('http://127.0.0.1:5000/api/insights', {
           headers: {
-            'Authorization': `Bearer ${session.access_token}`
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
           }
         });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch insights');
+
+        const responseText = await response.text();
+        const contentType = response.headers.get("content-type") || "";
+
+        if (!contentType.includes("application/json")) {
+          // Extract text from HTML tag preview
+          const cleanText = responseText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+          throw new Error(`Server returned non-JSON response: "${cleanText}"`);
         }
-        
-        const data = await response.json();
-        
-        if (data.status === 'success' && data.insights) {
+
+        const data = JSON.parse(responseText);
+
+        if (!response.ok) {
+          throw new Error(data.error || `Server error: ${response.status}`);
+        }
+
+        if (data.status === 'success' && Array.isArray(data.insights)) {
           setInsights(data.insights);
         } else {
-          throw new Error('Invalid response format');
+          throw new Error('Invalid response format received from server.');
         }
       } catch (err) {
+        console.error('[Insights] Error fetching data:', err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -53,7 +69,6 @@ export default function Insights() {
 
   return (
     <div className="space-y-4">
-      
       {/* Header Section */}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
@@ -77,7 +92,7 @@ export default function Insights() {
         </p>
       </motion.section>
 
-      {/* Phase 2: Predictive AI Section */}
+      {/* Predictive AI Section */}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -106,7 +121,6 @@ export default function Insights() {
 
         <div className="space-y-3">
           {loading ? (
-            // Glassmorphism Loading Skeletons
             <>
               {[1, 2].map((i) => (
                 <div key={i} className="flex items-center gap-3 rounded-[1.25rem] border border-dashed border-[#dfd0ff] bg-white/40 p-3 animate-pulse">
@@ -118,8 +132,11 @@ export default function Insights() {
                 </div>
               ))}
             </>
+          ) : insights.length === 0 ? (
+            <div className="p-4 text-center text-sm text-[#6a5a83] bg-white/50 rounded-2xl border border-[#dfd0ff]">
+              No insights available yet. Scan a prescription while signed in to generate health predictions.
+            </div>
           ) : (
-            // Dynamic AI Insights
             insights.map((insight, index) => {
               const IconComponent = IconMap[insight.icon] || Sparkles;
               const colorClasses = {
@@ -152,7 +169,6 @@ export default function Insights() {
           )}
         </div>
       </motion.section>
-      
     </div>
   );
 }

@@ -2,8 +2,10 @@ import { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import AgentStatus from './AgentStatus';
+import { useSupabaseClient } from '../supabaseClient.jsx';
 
 export default function Analyzing() {
+  const { session } = useSupabaseClient();
   const location = useLocation();
   const navigate = useNavigate();
   const images = useMemo(
@@ -17,7 +19,7 @@ export default function Analyzing() {
     const triggerAI = async () => {
       try {
         // Grab the URL and cleanly remove any accidental trailing slashes
-        const RAW_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const RAW_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
         const CLEAN_URL = RAW_URL.replace(/\/$/, ""); 
         
         // Now this will always safely form: https://domain.com/api/analyze
@@ -25,6 +27,7 @@ export default function Analyzing() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': session?.access_token ? `Bearer ${session.access_token}` : '',
           },
           body: JSON.stringify({ images })
         });

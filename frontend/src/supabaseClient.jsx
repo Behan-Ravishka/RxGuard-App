@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const fallbackSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const fallbackSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const apiBaseCandidates = [import.meta.env.VITE_API_URL, 'http://localhost:3000', ''];
+const apiBaseCandidates = [import.meta.env.VITE_API_URL, 'http://localhost:5000', ''];
 
 const SupabaseContext = createContext({
   supabase: null,
