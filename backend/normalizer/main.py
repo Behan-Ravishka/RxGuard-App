@@ -1,27 +1,35 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from thefuzz import process
 
-app = FastAPI()
+app = FastAPI(title="RxGuard Drug Normalizer")
 
-# A mock database of common drugs for our fuzzy logic to check against
 COMMON_DRUGS = [
     "Aspirin", "Ibuprofen", "Lisinopril", "Metformin", "Atorvastatin",
-    "Amoxicillin", "Levothyroxine", "Warfarin", "Omeprazole", "Losartan"
+    "Amoxicillin", "Levothyroxine", "Warfarin", "Omeprazole", "Losartan",
+    "Paracetamol", "Acetaminophen", "Atorvastatin Calcium", "Glimepiride",
+    "Sitagliptin", "Avitene"
 ]
 
-# This defines the shape of the data we expect from Node.js
 class DrugRequest(BaseModel):
     name: str
 
-@app.post("/normalize")
-async def normalize_drug(request: DrugRequest):
-    # process.extractOne compares the messy input against our clean list
-    # It returns the best match and a score out of 100
-    best_match, score = process.extractOne(request.name, COMMON_DRUGS)
-    
-    # We only accept the fix if it is at least 85% confident
+@app.get("/")
+async def root():
+    return {"status": "online", "message": "RxGuard Python Normalizer is running!"}
+
+# Handles GET requests sent by Node.js backend (/normalize?drug_name=...)
+@app.get("/normalize")
+async def normalize_drug_get(drug_name: str = Query(..., alias="drug_name")):
+    best_match, score = process.extractOne(drug_name, COMMON_DRUGS)
     if score > 85:
         return {"normalized_name": best_match, "score": score}
-    else:
-        return {"normalized_name": None, "score": score}
+    return {"normalized_name": drug_name, "score": score}
+
+# Handles POST requests sent with JSON bodies
+@app.post("/normalize")
+async def normalize_drug_post(request: DrugRequest):
+    best_match, score = process.extractOne(request.name, COMMON_DRUGS)
+    if score > 85:
+        return {"normalized_name": best_match, "score": score}
+    return {"normalized_name": request.name, "score": score}

@@ -4,10 +4,12 @@ import cors from "cors";
 import { runRxGuardAgent } from "./agents/rxGuardAnalyzer.js";
 import { generateHealthInsights } from "./agents/insightGenerator.js";
 import { createClient } from "@supabase/supabase-js";
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
+// Initialize Supabase Client for backend queries
 app.get("/api/config", (_req, res) => {
   const supabaseUrl = process.env.SUPABASE_URL ?? "";
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? "";
@@ -24,6 +26,7 @@ app.get("/api/config", (_req, res) => {
   });
 });
 
+// Prescription Scanning Agent Endpoint
 app.post("/api/analyze", async (req, res) => {
   try {
     const imagesFromBody = Array.isArray(req.body?.images)
@@ -59,6 +62,7 @@ app.post("/api/analyze", async (req, res) => {
   }
 });
 
+// Health Insights Agent Endpoint
 app.get("/api/insights", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
