@@ -1,9 +1,27 @@
 import { motion } from 'framer-motion';
-import { CheckCircle2, ChevronDown } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, CheckCircle2, ChevronDown, Info } from 'lucide-react';
 
 export default function AnalysisPanel({ result, onOpenDetails }) {
-  const severity = result?.fda_warning?.toLowerCase?.() || '';
-  const isSafe = !severity || severity.includes('no interaction');
+  const severity = (result?.severity_level || result?.fda_warning || '').toLowerCase();
+
+  const getSeverityState = (level) => {
+    if (!level || level === 'none' || level === 'safe' || level.includes('no interaction') || level.includes('manual entry') || level.includes('unable to retrieve')) {
+      return { label: 'Clear', tone: 'bg-[#eaf8ee] text-[#15803d]', title: 'No urgent concerns', Icon: CheckCircle2 };
+    }
+    if (level.includes('contraindicated') || level.includes('critical') || level.includes('severe')) {
+      return { label: 'Critical', tone: 'bg-[#ffe2e2] text-[#b42318]', title: 'Review required', Icon: AlertOctagon };
+    }
+    if (level.includes('major')) {
+      return { label: 'Major', tone: 'bg-[#ffe9d6] text-[#b54708]', title: 'Review required', Icon: AlertTriangle };
+    }
+    if (level.includes('moderate')) {
+      return { label: 'Moderate', tone: 'bg-[#fff6cc] text-[#93370d]', title: 'Review required', Icon: AlertTriangle };
+    }
+    return { label: 'Minor', tone: 'bg-[#e0f2fe] text-[#075985]', title: 'Monitor closely', Icon: Info };
+  };
+
+  const severityState = getSeverityState(severity);
+  const StatusIcon = severityState.Icon;
 
   const steps = [
     { label: 'Reading text' },
@@ -21,10 +39,11 @@ export default function AnalysisPanel({ result, onOpenDetails }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#8b6fd6]">Safety review</p>
-          <h3 className="mt-1 text-lg font-semibold text-[#34214f]">{isSafe ? 'No urgent concerns' : 'Review required'}</h3>
+          <h3 className="mt-1 text-lg font-semibold text-[#34214f]">{severityState.title}</h3>
         </div>
-        <div className={`rounded-full px-3 py-1 text-xs font-semibold ${isSafe ? 'bg-[#eaf8ee] text-[#15803d]' : 'bg-[#ffece8] text-[#b42318]'}`}>
-          {isSafe ? 'Clear' : 'Attention'}
+        <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${severityState.tone}`}>
+          <StatusIcon size={14} />
+          {severityState.label}
         </div>
       </div>
 
@@ -48,7 +67,7 @@ export default function AnalysisPanel({ result, onOpenDetails }) {
       <div className="mt-4 space-y-3">
         <details className="rounded-2xl border border-[#eee4ff] bg-white/70 p-3">
           <summary className="flex cursor-pointer items-center justify-between text-sm font-semibold text-[#34214f]">
-            Mechanism of action
+            Short FDA summary
             <ChevronDown size={16} />
           </summary>
           <p className="mt-3 text-sm leading-7 text-[#6a5a83]">

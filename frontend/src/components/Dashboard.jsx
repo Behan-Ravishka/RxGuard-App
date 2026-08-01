@@ -176,7 +176,8 @@ export default function Dashboard() {
               whileHover={{ y: -2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
               className="flex items-start justify-between rounded-[1.35rem] border border-[#efe6ff] bg-white/80 px-3 py-3 shadow-sm backdrop-blur-md"
             >
-              <div className="flex-1 pr-3">
+              {/* Added min-w-0 and adjusted pr-2 to force long text to break safely */}
+              <div className="flex-1 min-w-0 pr-2">
                 <p className="text-sm font-semibold text-[#34214f] capitalize">
                   {Array.isArray(item.drugs_detected) && item.drugs_detected.length > 0
                     ? item.drugs_detected.join(' + ')
@@ -189,7 +190,12 @@ export default function Dashboard() {
                   {warningText}
                 </p>
               </div>
-              <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${getSeverityTone(severityLabel)}`}>
+              
+              {/* Added max-w-[95px], truncate, and title attributes for overflow protection */}
+              <span 
+                className={`shrink-0 max-w-[95px] truncate text-center rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${getSeverityTone(severityLabel)}`}
+                title={severityLabel}
+              >
                 {severityLabel}
               </span>
             </motion.div>

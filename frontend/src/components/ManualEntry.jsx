@@ -57,7 +57,10 @@ export default function ManualEntry() {
     const manualPayload = {
       status: "success",
       drugs_detected: [drug1, drug2].filter(d => d.trim() !== ""),
-      fda_warning: "Manual entry bypass. To run a full FDA check, this array must be passed back through the AgentExecutor FDA tool."
+      fda_summary: "Manual entry was used, so no official FDA interaction summary was generated.",
+      fda_raw_text: "",
+      fda_warning: "Manual entry bypass. To run a full FDA check, this array must be passed back through the AgentExecutor FDA tool.",
+      severity_level: "none"
     };
 
     navigate('/results', { state: { result: manualPayload } });

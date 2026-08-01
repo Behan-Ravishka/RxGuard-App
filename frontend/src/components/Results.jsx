@@ -79,12 +79,14 @@ export default function Results() {
     )].sort().join('|')
     : '';
 
-  const warningText = (result?.fda_warning ?? result?.fda_summary ?? '').trim();
-  const saveSignature = [session?.user?.id ?? 'guest', normalizedDrugKey, warningText.toLowerCase()].join('::');
+  const severityValue = (result?.severity_level ?? result?.fda_warning ?? '').trim();
+  const shortSummaryText = (result?.fda_summary ?? '').trim();
+  const officialDetailsText = (result?.fda_raw_text ?? result?.fda_warning ?? result?.fda_summary ?? '').trim();
+  const saveSignature = [session?.user?.id ?? 'guest', normalizedDrugKey, officialDetailsText.toLowerCase()].join('::');
 
-  const getSeverityLevel = (warning) => {
-    if (!warning || warning.trim() === '') return 'none';
-    const text = warning.toLowerCase();
+  const getSeverityLevel = (severity) => {
+    const text = (severity || '').toLowerCase();
+    if (!text || text === 'none' || text === 'safe' || text.includes('no interaction') || text.includes('manual entry') || text.includes('unable to retrieve')) return 'none';
     if (text.includes('contraindicated') || text.includes('severe')) return 'critical';
     if (text.includes('major')) return 'major';
     if (text.includes('moderate')) return 'moderate';
@@ -104,12 +106,13 @@ export default function Results() {
 
       saveAttemptedRef.current = true;
       const normalizedDrugs = normalizedDrugKey ? normalizedDrugKey.split('|') : [];
+      const persistedWarningText = officialDetailsText || shortSummaryText || severityValue;
 
       const { data: existingRows, error: existingError } = await supabase
         .from('scan_history')
         .select('id')
         .eq('user_id', session.user.id)
-        .eq('fda_warning', warningText)
+        .eq('fda_warning', persistedWarningText)
         .contains('drugs_detected', normalizedDrugs)
         .limit(1);
 
@@ -121,8 +124,8 @@ export default function Results() {
       const payload = {
         user_id: session.user.id,
         drugs_detected: normalizedDrugs,
-        fda_warning: warningText,
-        severity_level: getSeverityLevel(warningText),
+        fda_warning: persistedWarningText,
+        severity_level: getSeverityLevel(severityValue),
       };
 
       const { error } = await supabase.from('scan_history').insert([payload]);
@@ -135,7 +138,7 @@ export default function Results() {
     };
 
     saveResultToHistory();
-  }, [result, session, supabase, saveSignature, normalizedDrugKey, warningText]);
+  }, [result, session, supabase, saveSignature, normalizedDrugKey, officialDetailsText, shortSummaryText, severityValue]);
 
   // Render Healthcare Loader during preparation
   if (isPreparing) {
@@ -156,33 +159,41 @@ export default function Results() {
     );
   }
 
-  const { status, drugs_detected = [], fda_summary = "", fda_raw_text = "", fda_warning = "" } = result;
+  const { status, drugs_detected = [], fda_summary = "", fda_raw_text = "", fda_warning = "", severity_level = "" } = result;
 
-  const getSeverityUI = (warning) => {
-    if (!warning || warning.trim() === "") {
+  const summaryLines = shortSummaryText
+    ? shortSummaryText
+      .split(/\n+/)
+      .map((line) => line.replace(/^[•\-\s]+/, '').trim())
+      .filter(Boolean)
+    : [];
+
+  const getSeverityUI = (severity) => {
+    const level = getSeverityLevel(severity);
+
+    if (level === 'none') {
       return { label: 'SAFE / NO INTERACTION', bg: 'from-emerald-400 to-emerald-500 shadow-emerald-500/30', Icon: CheckCircle2 };
     }
-    
-    const text = warning.toLowerCase();
-    if (text.includes('contraindicated') || text.includes('severe')) {
+
+    if (level === 'critical') {
       return { label: 'CONTRAINDICATED', bg: 'from-rose-500 to-rose-600 shadow-rose-500/30', Icon: AlertOctagon };
     }
-    if (text.includes('major')) {
+    if (level === 'major') {
       return { label: 'MAJOR INTERACTION', bg: 'from-orange-500 to-orange-600 shadow-orange-500/30', Icon: AlertTriangle };
     }
-    if (text.includes('moderate')) {
+    if (level === 'moderate') {
       return { label: 'MODERATE INTERACTION', bg: 'from-amber-400 to-amber-500 shadow-amber-500/30', Icon: AlertTriangle };
     }
     
     return { label: 'MINOR INTERACTION', bg: 'from-emerald-400 to-emerald-500 shadow-emerald-500/30', Icon: Info };
   };
 
-  const severityUI = getSeverityUI(fda_summary || fda_warning);
+  const severityUI = getSeverityUI(severity_level || severityValue);
   const StatusIcon = severityUI.Icon;
 
   const handleReadFullDetails = () => {
     navigate('/details', {
-      state: { fda_raw_text },
+      state: { fda_raw_text: officialDetailsText || fda_raw_text },
     });
   };
 
@@ -245,13 +256,17 @@ export default function Results() {
           FDA Interaction Details
         </h3>
         
-        {fda_summary ? (
+        {summaryLines.length > 0 ? (
           <>
-            <p className="text-sm text-[#4b5563] leading-relaxed font-medium">
-              {fda_summary}
-            </p>
+            <div className="space-y-2 text-sm text-[#4b5563] leading-relaxed font-medium">
+              {summaryLines.map((line) => (
+                <p key={line} className="rounded-2xl bg-white/55 px-3 py-2 shadow-sm">
+                  {line}
+                </p>
+              ))}
+            </div>
 
-            {fda_raw_text ? (
+            {officialDetailsText ? (
               <button
                 onClick={handleReadFullDetails}
                 className="mt-5 w-full flex items-center justify-center gap-2 rounded-2xl border border-[#dfd0ff] bg-white/80 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.1em] text-[#4c2c97] transition-all hover:bg-white active:scale-95 shadow-sm"
@@ -262,7 +277,9 @@ export default function Results() {
           </>
         ) : (
           <p className="text-sm text-[#7f6b9d] italic">
-            No known adverse interactions found between these medications based on current openFDA data.
+            {severityValue === 'none'
+              ? 'No known adverse interactions found between these medications based on current openFDA data.'
+              : 'FDA details are available, but a short summary could not be generated.'}
           </p>
         )}
       </motion.div>
