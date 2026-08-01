@@ -357,7 +357,7 @@ ${scratchpad}
         const answerText = finalAnswerMatch[1].trim();
         const json = safeJsonParse(answerText) || extractJsonFromText(answerText);
         if (json) return json;
-        return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "" };
+        return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "", severity_level: "none" };
       }
     }
 
@@ -389,7 +389,7 @@ ${scratchpad}
     iteration++;
   }
 
-  return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "" };
+  return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "", severity_level: "none" };
 }
 
 function extractJsonFromText(value) {
@@ -404,7 +404,7 @@ function extractJsonFromText(value) {
 export async function runRxGuardAgent(images) {
   const imageList = Array.isArray(images) ? images.filter(img => typeof img === "string" && img.trim()) : [];
   if (imageList.length === 0) {
-    return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "" };
+    return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "", severity_level: "none" };
   }
 
   const imageIds = [];
@@ -455,7 +455,7 @@ Output requirements:
       drugs = result.drugs_detected;
     } else {
       // If agent didn't return drugs, fallback to manual entry
-      return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "" };
+      return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "", severity_level: "none" };
     }
 
     // --- Override summary with real FDA data and build bullet-point summary ---
@@ -498,10 +498,11 @@ Output requirements:
       fda_summary: fdaShortSummary,
       fda_raw_text: fdaFullRaw,
       fda_warning: severity,
+      severity_level: severity,
     };
   } catch (error) {
     console.error("[RxGuard Agent Failure]:", error);
     for (const id of imageIds) IMAGE_STORE.delete(id);
-    return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "" };
+    return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "", severity_level: "none" };
   }
 }

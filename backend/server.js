@@ -60,7 +60,7 @@ app.post("/api/analyze", async (req, res) => {
               user_id: authData.user.id,
               drugs_detected: agentResult.drugs_detected || [],
               fda_warning: agentResult.fda_raw_text || agentResult.fda_warning || "",
-              severity_level: agentResult.severity_level || "none"
+              severity_level: agentResult.severity_level || agentResult.fda_warning || "none"
             });
 
           if (dbError) {
