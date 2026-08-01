@@ -27,12 +27,13 @@ export default function Profile() {
       }
 
       setHistoryLoading(true);
+      
+      // Removed .limit(5) so the frontend can accurately calculate all-time totals
       const { data, error } = await supabase
         .from('scan_history')
         .select('id, created_at, drugs_detected, fda_warning, severity_level')
         .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
+        .order('created_at', { ascending: false });
 
       if (!error) {
         setHistory(data ?? []);
@@ -91,6 +92,7 @@ export default function Profile() {
     (count, scan) => count + (Array.isArray(scan.drugs_detected) ? scan.drugs_detected.length : 0),
     0,
   );
+  
   const latestScan = history[0];
 
   return (
