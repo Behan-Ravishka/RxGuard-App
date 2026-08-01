@@ -88,7 +88,7 @@ export default function Insights() {
           </div>
         </div>
         <p className="text-sm leading-relaxed text-[#4b5563]">
-          AI-powered predictions that analyze your medication history and health trends to identify potential risks early. Receive personalized insights that help you take preventive action before health issues become more serious.
+          Personalized wellness tips based on your medication history to help you stay ahead of potential health risks.
         </p>
       </motion.section>
 
@@ -110,7 +110,7 @@ export default function Insights() {
         </div>
         
         <p className="text-sm leading-relaxed text-[#6a5a83] mb-5">
-          Integrated Machine Learning models are actively analyzing your scan history to flag early health risk patterns before symptoms emerge.
+          Actively analyzing your scan history to flag early health patterns and provide safe wellness tips.
         </p>
 
         {error && (
@@ -134,7 +134,7 @@ export default function Insights() {
             </>
           ) : insights.length === 0 ? (
             <div className="p-4 text-center text-sm text-[#6a5a83] bg-white/50 rounded-2xl border border-[#dfd0ff]">
-              No insights available yet. Scan a prescription while signed in to generate health predictions.
+              No insights yet. Scan a prescription to unlock personalized health tips.
             </div>
           ) : (
             insights.map((insight, index) => {
