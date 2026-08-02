@@ -50,7 +50,7 @@ This repository uses the following stack:
 - Severity-aware warning badges and alert styling.
 - Saved scan history, dashboard metrics, and alerts for authenticated users.
 
-## AI Agent Workflow for Open Category Teams
+## AI Agent Workflow
 
 RxGuard uses an agent pipeline that works well for open category team submissions because it is modular and easy to explain:
 
