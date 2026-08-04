@@ -29,8 +29,9 @@ export default function Insights() {
         setLoading(true);
         setError('');
 
-        // Use the environment variable for deployment, fallback to localhost for local dev
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000';
+        // Fetch environment variable and safely strip any accidental trailing slashes
+        const rawApiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000';
+        const apiUrl = rawApiUrl.replace(/\/$/, ''); 
 
         const response = await fetch(`${apiUrl}/api/insights`, {
           headers: {
