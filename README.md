@@ -2,7 +2,7 @@
 
 **AI-Powered Medication Safety & Interaction Analyzer**  
 
-*[![Demo Video](https://img.shields.io/badge/Watch-Video_Pitch-8b5cf6?style=for-the-badge&logo=youtube)](https://drive.google.com/file/d/1hYJu8qDVQOWCxThDhtJ10ma4-G4uDaMH/view?usp=drive_link)*
+*[![Demo Video](https://img.shields.io/badge/Watch-Video_Pitch-8b5cf6?style=for-the-badge&logo=youtube)](https://drive.google.com/file/d/13u6JXw6Hd3hKPkfuzOPpKJixp7aB2S-v/view?usp=sharing)*
 
 ---
 
