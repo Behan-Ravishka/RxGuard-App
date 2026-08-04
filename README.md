@@ -2,7 +2,7 @@
 
 **AI-Powered Medication Safety & Interaction Analyzer**  
 
-[![Demo Video](https://img.shields.io/badge/Watch-Video_Pitch-8b5cf6?style=for-the-badge&logo=youtube)](#) *(Link your video pitch here)*
+*[![Demo Video](https://img.shields.io/badge/Watch-Video_Pitch-8b5cf6?style=for-the-badge&logo=youtube)](https://drive.google.com/file/d/1hYJu8qDVQOWCxThDhtJ10ma4-G4uDaMH/view?usp=drive_link)*
 
 ---
 
@@ -52,7 +52,7 @@ This repository uses the following stack:
 
 ## AI Agent Workflow
 
-RxGuard uses an agent pipeline that works well for open category team submissions because it is modular and easy to explain:
+RxGuard uses an agent pipeline that works well because it is modular and easy to explain:
 
 1. Capture team members collect one or more prescription images from the mobile or web UI.
 2. The frontend sends the image set to the backend `analyze` endpoint.
@@ -66,7 +66,6 @@ RxGuard uses an agent pipeline that works well for open category team submission
 7. The frontend shows the summary, the detected medications, and a severity badge.
 8. Signed-in scans are stored in Supabase so teams can review history, alerts, and trends.
 
-For Open Category teams, this workflow makes it easy to demo the full path from image capture to clinically useful safety output without hiding the important source data.
 
 ## Setup Instructions
 
