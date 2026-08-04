@@ -29,7 +29,10 @@ export default function Insights() {
         setLoading(true);
         setError('');
 
-        const response = await fetch('http://127.0.0.1:5000/api/insights', {
+        // Use the environment variable for deployment, fallback to localhost for local dev
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000';
+
+        const response = await fetch(`${apiUrl}/api/insights`, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json'
@@ -109,12 +112,12 @@ export default function Insights() {
           </span>
         </div>
         
-        <p className="text-sm leading-relaxed text-[#6a5a83] mb-5">
+        <p className="mb-5 text-sm leading-relaxed text-[#6a5a83]">
           Actively analyzing your scan history to flag early health patterns and provide safe wellness tips.
         </p>
 
         {error && (
-          <div className="p-3 mb-4 text-sm text-rose-500 bg-rose-50 rounded-xl border border-rose-100">
+          <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-500">
             Error loading insights: {error}
           </div>
         )}
@@ -133,7 +136,7 @@ export default function Insights() {
               ))}
             </>
           ) : insights.length === 0 ? (
-            <div className="p-4 text-center text-sm text-[#6a5a83] bg-white/50 rounded-2xl border border-[#dfd0ff]">
+            <div className="rounded-2xl border border-[#dfd0ff] bg-white/50 p-4 text-center text-sm text-[#6a5a83]">
               No insights yet. Scan a prescription to unlock personalized health tips.
             </div>
           ) : (
@@ -154,14 +157,14 @@ export default function Insights() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.3, delay: index * 0.1 }}
                   key={index} 
-                  className="flex items-center gap-3 rounded-[1.25rem] border border-solid border-[#dfd0ff] bg-white p-3 shadow-sm hover:shadow-md transition-shadow"
+                  className="flex items-center gap-3 rounded-[1.25rem] border border-solid border-[#dfd0ff] bg-white p-3 shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${colorClasses}`}>
                     <IconComponent size={20} />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-[#34214f]">{insight.title}</h3>
-                    <p className="text-xs text-[#7f6b9d] leading-snug mt-0.5">{insight.description}</p>
+                    <p className="mt-0.5 text-xs leading-snug text-[#7f6b9d]">{insight.description}</p>
                   </div>
                 </motion.div>
               );
