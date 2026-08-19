@@ -2,11 +2,19 @@
   "version": 2,
   "builds": [
     {
+      "src": "normalizer/main.py",
+      "use": "@vercel/python"
+    },
+    {
       "src": "server.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
+    {
+      "src": "/normalize(.*)",
+      "dest": "normalizer/main.py"
+    },
     {
       "src": "/(.*)",
       "dest": "server.js"
