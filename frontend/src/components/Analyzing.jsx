@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AlertCircle, Camera, Keyboard } from 'lucide-react';
 import AgentStatus from './AgentStatus';
 import { useSupabaseClient } from '../supabaseClient.jsx';
 
@@ -8,6 +9,10 @@ export default function Analyzing() {
   const { session } = useSupabaseClient();
   const location = useLocation();
   const navigate = useNavigate();
+  
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
   const images = useMemo(
     () => location.state?.images ?? (location.state?.image ? [location.state.image] : []),
     [location.state],
@@ -18,11 +23,9 @@ export default function Analyzing() {
 
     const triggerAI = async () => {
       try {
-        // Grab the URL and cleanly remove any accidental trailing slashes
         const RAW_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
         const CLEAN_URL = RAW_URL.replace(/\/$/, ""); 
         
-        // Now this will always safely form: https://domain.com/api/analyze
         const response = await fetch(`${CLEAN_URL}/api/analyze`, {
           method: 'POST',
           headers: {
@@ -36,10 +39,9 @@ export default function Analyzing() {
         console.log("Agent Final Output:", data);
         
         setTimeout(() => {
-          if (data.status === "manual_entry_required") {
-            navigate('/manual', { 
-              state: { message: "Image too blurry or no drugs found. Please enter medications manually." } 
-            });
+          if (data.status === "manual_entry_required" || data.error) {
+            setErrorMessage("Image too blurry or no identifiable medications were found. Please try again or enter them manually.");
+            setHasError(true);
           } else {
             navigate('/results', { state: { result: data } });
           }
@@ -47,15 +49,16 @@ export default function Analyzing() {
         
       } catch (error) {
         console.error("Analysis failed:", error);
-        // Fallback catch: force manual entry if the server completely crashes
-        navigate('/manual', { 
-          state: { message: "Server connection lost. Please enter medications manually." } 
-        });
+        setErrorMessage("Server connection lost or analysis failed. Please verify your connection.");
+        setHasError(true);
       }
     };
 
-    triggerAI();
-  }, [images, navigate]);
+    // Only trigger AI if we haven't hit an error yet
+    if (!hasError) {
+      triggerAI();
+    }
+  }, [images, navigate, session, hasError]);
 
   if (images.length === 0) {
     return (
@@ -72,33 +75,67 @@ export default function Analyzing() {
   }
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center pt-8 space-y-6"
-    >
-      {/* Display captured images in sleek glass frames */}
-      <div className="flex flex-wrap justify-center gap-4 px-4">
+    <div className="flex flex-col items-center justify-center pt-8 space-y-6 px-4">
+      
+      {/* Display captured images */}
+      <div className="flex flex-wrap justify-center gap-4">
         {images.map((image, index) => (
           <motion.div
             key={`${index}-${image.slice(0, 24)}`}
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: index * 0.1 }}
-            className="overflow-hidden rounded-[1.25rem] border border-white/60 bg-white/40 p-1.5 shadow-sm backdrop-blur-md"
+            className={`overflow-hidden rounded-[1.25rem] border ${hasError ? 'border-rose-300' : 'border-white/60'} bg-white/40 p-1.5 shadow-sm backdrop-blur-md transition-colors`}
           >
             <img 
               src={image} 
               alt={`Captured ${index + 1}`} 
-              className="w-24 h-24 rounded-[1rem] object-cover opacity-80" 
+              className={`w-24 h-24 rounded-[1rem] object-cover transition-opacity ${hasError ? 'opacity-50 grayscale' : 'opacity-80'}`} 
             />
           </motion.div>
         ))}
       </div>
       
-      {/* The workflow visualizer */}
-      <AgentStatus />
+      <AnimatePresence mode="wait">
+        {!hasError ? (
+          <motion.div key="status-visualizer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -20 }} className="w-full">
+            <AgentStatus />
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="error-dialog"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="w-full max-w-md rounded-[1.75rem] border border-rose-200/60 bg-gradient-to-br from-rose-50 to-white p-6 shadow-xl shadow-rose-500/10 backdrop-blur-xl text-center"
+          >
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-500 mb-4">
+              <AlertCircle size={28} />
+            </div>
+            <h3 className="text-xl font-black text-[#201c45]">Analysis Interrupted</h3>
+            <p className="mt-2 text-sm text-slate-600 font-medium leading-relaxed">
+              {errorMessage}
+            </p>
 
-    </motion.div>
+            <div className="mt-6 flex flex-col gap-3">
+              <button 
+                onClick={() => navigate('/capture')}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#8b5cf6] px-4 py-3.5 font-bold text-white shadow-md shadow-purple-500/25 transition-all hover:bg-[#7c3aed] active:scale-95"
+              >
+                <Camera size={18} />
+                Retake Photo
+              </button>
+              <button 
+                onClick={() => navigate('/manual')}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#dfd0ff] bg-white/80 px-4 py-3.5 font-bold text-[#4c2c97] shadow-sm transition-all hover:bg-[#f4ebff] active:scale-95"
+              >
+                <Keyboard size={18} />
+                Enter Manually
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    </div>
   );
 }
