@@ -13,7 +13,7 @@ const FDA_API_BASE_URL = process.env.FDA_API_BASE_URL || "https://api.fda.gov";
 const IMAGE_STORE = new Map();
 let nextImageId = 0;
 
-// --- Helper Functions (identical to before) ---
+// --- Helper Functions ---
 function safeJsonParse(value) {
   if (typeof value !== "string") return null;
   const sanitizedOutput = value.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -101,7 +101,6 @@ function getWorstSeverityLabel(text) {
   return "MINOR INTERACTION";
 }
 
-// --- New helper: build a concise bullet-point summary from FDA data ---
 function buildShortSummary(fdaData) {
   if (!fdaData || !fdaData.success) return "⚠️ Unable to retrieve interaction data.";
 
@@ -114,9 +113,7 @@ function buildShortSummary(fdaData) {
 
   const bullets = warnings.map((p) => {
     const [drug1, drug2] = p.drugs;
-    // Truncate warning to a short phrase if too long
     let shortText = p.raw_text.trim();
-    // If the text is very long, take first sentence or a limited number of words
     if (shortText.length > 120) {
       const firstSentence = shortText.match(/^[^.!?]*[.!?]/);
       shortText = firstSentence ? firstSentence[0] : shortText.slice(0, 120) + '...';
@@ -127,7 +124,8 @@ function buildShortSummary(fdaData) {
   return bullets.join('\n');
 }
 
-// --- Tool Definitions (unchanged) ---
+// --- Tool Definitions ---
+
 export const createVisionOcrTool = () => new DynamicTool({
   name: "vision_ocr_tool",
   description: "Use this first. Extract handwritten or printed medication names from the images. Input should be a comma-separated list of Image IDs to analyze.",
@@ -211,18 +209,48 @@ export const nameNormalizerTool = new DynamicTool({
 
       const normalizedResults = await Promise.all(
         rawDrugs.map(async (drugName) => {
-          const url = `${PYTHON_NORMALIZER_URL}/normalize?drug_name=${encodeURIComponent(drugName)}`;
+          // Implement 6-second timeout so the agent doesn't hang if Python API is slow/down
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000); 
+
           try {
-            const response = await fetch(url);
+            // Using POST instead of GET is safer for medical names containing special characters
+            const response = await fetch(`${PYTHON_NORMALIZER_URL}/normalize`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: drugName }),
+              signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
             const data = await response.json();
+            
             return {
               input: drugName,
               normalized_name: data?.normalized_name?.trim() || drugName,
               score: data?.score ?? null,
+              source: data?.source || "none",
+              is_correction: data?.is_correction ?? false,
               success: true,
             };
-          } catch {
-            return { input: drugName, normalized_name: drugName, success: false };
+          } catch (err) {
+            clearTimeout(timeoutId);
+            console.warn(`[name_normalizer_tool] API failed for '${drugName}':`, err.message);
+            
+            // Graceful fallback: return original name so agent flow doesn't break entirely
+            return { 
+              input: drugName, 
+              normalized_name: drugName, 
+              score: null, 
+              source: "fallback",
+              is_correction: false,
+              success: false 
+            };
           }
         }),
       );
@@ -269,7 +297,13 @@ export const fdaDatabaseTool = new DynamicTool({
         pairs.map(async ([drug1, drug2]) => {
           const url = `${FDA_API_BASE_URL}/drug/label.json?search=drug_interactions:"${encodeURIComponent(drug1)}"+AND+drug_interactions:"${encodeURIComponent(drug2)}"&limit=1`;
           try {
-            const response = await fetch(url);
+            // Also applying a timeout to FDA API for stability
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
             if (!response.ok) return { drugs: [drug1, drug2], raw_text: "" };
             const data = await response.json();
             const warningText = data?.results?.[0]?.drug_interactions?.[0] ?? "";
@@ -293,7 +327,7 @@ export const fdaDatabaseTool = new DynamicTool({
         raw_texts: rawTexts,
         message: warningText ? `FDA Warning:\n\n${warningText}` : "No explicit interaction warning found in FDA database.",
         pairs_checked: pairResults.length,
-        pair_results: pairResults, // include full pair results for detailed bullet building
+        pair_results: pairResults, 
       });
     } catch (error) {
       console.error("[fda_database_tool] error:", error);
@@ -302,7 +336,7 @@ export const fdaDatabaseTool = new DynamicTool({
   },
 });
 
-// --- Custom Agent Loop (unchanged) ---
+// --- Custom Agent Loop ---
 async function runAgentLoop(question, maxIterations = 6) {
   const llm = new ChatGoogleGenerativeAI({
     apiKey: process.env.GOOGLE_API_KEY,
@@ -400,7 +434,7 @@ function extractJsonFromText(value) {
   return safeJsonParse(value.slice(firstBrace, lastBrace + 1));
 }
 
-// --- Main Exported Function with custom summary override ---
+// --- Main Exported Function ---
 export async function runRxGuardAgent(images) {
   const imageList = Array.isArray(images) ? images.filter(img => typeof img === "string" && img.trim()) : [];
   if (imageList.length === 0) {
@@ -454,7 +488,6 @@ Output requirements:
     if (result.status !== "manual_entry_required" && Array.isArray(result.drugs_detected) && result.drugs_detected.length > 0) {
       drugs = result.drugs_detected;
     } else {
-      // If agent didn't return drugs, fallback to manual entry
       return { status: "manual_entry_required", drugs_detected: [], fda_summary: "", fda_raw_text: "", fda_warning: "", severity_level: "none" };
     }
 
@@ -472,13 +505,10 @@ Output requirements:
         const fdaResponse = await fdaDatabaseTool.func(JSON.stringify(drugs));
         const fdaData = safeJsonParse(fdaResponse);
         if (fdaData && fdaData.success) {
-          // Build short bullet summary
           fdaShortSummary = buildShortSummary(fdaData);
-          // Full raw text (can be lengthy)
           fdaFullRaw = fdaData.warning || fdaData.message || "";
           severity = getWorstSeverityLabel(fdaData.warning) || "none";
         } else {
-          // Fallback: use agent's summary if FDA call fails
           fdaShortSummary = result.fda_summary || "Unable to retrieve interaction data.";
           fdaFullRaw = result.fda_raw_text || "";
           severity = result.fda_warning || "none";
@@ -491,7 +521,6 @@ Output requirements:
       }
     }
 
-    // Return final structured response
     return {
       status: "success",
       drugs_detected: drugs,
